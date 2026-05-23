@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vugra API</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="index.html">Vugra</a>
+      <p class="tagline">Public API reference for the current Vugra facade.</p>
+      <p class="nav-title">Docs</p>
+      <ul class="nav-list">
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="manual.html">Manual</a></li>
+        <li><a aria-current="page" href="api.html">API</a></li>
+        <li><a href="wasm.html">Wasm</a></li>
+      </ul>
+      <p class="nav-title">Packages</p>
+      <ul class="nav-list">
+        <li><a href="#pkg-vugra">pkg/vugra</a></li>
+        <li><a href="#pkg-signal">pkg/signal</a></li>
+        <li><a href="#pkg-system">pkg/system</a></li>
+        <li><a href="#wasm-api">Wasm API</a></li>
+        <li><a href="#cli-api">CLI</a></li>
+      </ul>
+    </aside>
+    <main class="content">
+      <p class="eyebrow">API</p>
+      <h1>Stable public surface</h1>
+      <p class="lead">Application code should depend on `pkg/vugra`, `pkg/signal`, and `pkg/system`. Internal packages are implementation details for compiler, runtime, layout, renderers, and tooling.</p>
+
+      <h2 id="pkg-vugra">pkg/vugra</h2>
+      <p>`pkg/vugra` is the public runtime facade and type alias layer. It exposes component IR types, runtime mount options, renderer interfaces, layout constraints, and host-neutral system types.</p>
+      <table>
+        <thead><tr><th>Symbol</th><th>Kind</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>Mount(component, state, target, options)</code></td><td>Function</td><td>Mounts a Vugra component into a renderer and returns an `*App`.</td></tr>
+          <tr><td><code>NewSoftware(width, height)</code></td><td>Function</td><td>Creates a software renderer for PNG/test output.</td></tr>
+          <tr><td><code>Emit(event)</code></td><td>Function</td><td>Marker used by generated/component logic for component event semantics.</td></tr>
+          <tr><td><code>App</code></td><td>Type alias</td><td>Runtime app handle. Important methods include `Flush`, `Unmount`, `Resize`, `DispatchPointerEvent`, `DispatchScroll`, `DispatchKey`, `DispatchTextInput`, input selection APIs, and document text selection APIs.</td></tr>
+          <tr><td><code>TextSelection</code></td><td>Type alias</td><td>Renderer-neutral text selection with Vugra input `ID` or document text scope, binding name when relevant, and rune-offset `Start`/`End` range. It deliberately avoids browser DOM `Range` objects so native and wasm hosts share the same API.</td></tr>
+          <tr><td><code>TextSelection</code>, <code>SetTextSelection</code>, <code>SelectedText</code></td><td>Methods</td><td>Query, set, collapse, and read focused or targeted text input selections.</td></tr>
+          <tr><td><code>DocumentTextSelection</code>, <code>SelectedDocumentText</code>, <code>ClearDocumentTextSelection</code></td><td>Methods</td><td>Query, read, and clear renderer-owned selection over non-control rendered document text such as documentation headings and paragraphs.</td></tr>
+          <tr><td><code>State</code></td><td>Type alias</td><td>Runtime state maps for signals, methods, and event methods.</td></tr>
+          <tr><td><code>Component</code>, <code>Node</code>, <code>Element</code>, <code>Text</code></td><td>Type aliases</td><td>Framework-owned component IR.</td></tr>
+          <tr><td><code>Interpolation</code>, <code>Conditional</code>, <code>Repeater</code></td><td>Type aliases</td><td>Template binding IR nodes.</td></tr>
+          <tr><td><code>ComponentInstance</code>, <code>DynamicComponent</code></td><td>Type aliases</td><td>Component composition IR.</td></tr>
+          <tr><td><code>Prop</code>, <code>PropDef</code>, <code>ProvideDef</code>, <code>InjectDef</code>, <code>Slot</code>, <code>EmitDef</code>, <code>Lifecycle</code>, <code>EventHandler</code></td><td>Type aliases</td><td>Component metadata used by generated code and runtime.</td></tr>
+          <tr><td><code>Constraints</code>, <code>Measurer</code>, <code>FixedMeasurer</code></td><td>Type aliases</td><td>Layout inputs and text measurement contracts.</td></tr>
+          <tr><td><code>LayoutEngine</code>, <code>LayoutEngineGo</code>, <code>LayoutEngineCSS</code></td><td>Type alias and constants</td><td>Runtime layout engine selection exposed for generated/native/wasm entry points.</td></tr>
+          <tr><td><code>Renderer</code>, <code>Command</code>, <code>Rect</code>, <code>SoftwareRenderer</code></td><td>Type aliases</td><td>Renderer-neutral output contract.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Mount Example</h3>
+      <pre><code>target := vugra.NewSoftware(800, 600)
+app := vugra.Mount(component.Component(), component.NewRuntimeState(nil), target, vugra.Options{
+    Styles:      component.Styles(),
+    Constraints: vugra.Constraints{Width: 800, Height: 600},
+    Measurer:    vugra.FixedMeasurer{CharWidth: 8, LineHeight: 20},
+})
+app.Flush()</code></pre>
+
+      <h2 id="pkg-signal">pkg/signal</h2>
+      <p>`pkg/signal` provides explicit reactive values for Go component state.</p>
+      <table>
+        <thead><tr><th>Symbol</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>signal.Signal[T]</code></td><td>Generic signal with `Get`, `Set`, `Update`, `Subscribe`, `GetAny`, and `SetAny`.</td></tr>
+          <tr><td><code>signal.New[T](initial)</code></td><td>Constructs a generic signal.</td></tr>
+          <tr><td><code>signal.Int</code>, <code>signal.Bool</code>, <code>signal.String</code></td><td>Concrete signal types used by examples and template metadata.</td></tr>
+          <tr><td><code>signal.NewInt</code>, <code>signal.NewBool</code>, <code>signal.NewString</code></td><td>Construct concrete signals with initial values.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="pkg-system">pkg/system</h2>
+      <p>`pkg/system` is the host boundary for capabilities that should stay replaceable across native, wasm, tests, and sandboxed runtimes.</p>
+      <table>
+        <thead><tr><th>Symbol</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>FileSystem</code></td><td>Interface for `ReadDir`, `Stat`, `Mkdir`, `Rename`, `Remove`, and `Duplicate`.</td></tr>
+          <tr><td><code>Entry</code></td><td>Renderer-neutral file metadata with name, path, kind, size, and modified time.</td></tr>
+          <tr><td><code>OSFileSystem</code></td><td>Native `os` backed implementation.</td></tr>
+          <tr><td><code>WebFileSystem</code></td><td>Wasm browser implementation backed by sandboxed Web Storage, with an in-memory fallback for non-browser wasm hosts.</td></tr>
+          <tr><td><code>MockFileSystem</code></td><td>In-memory implementation for examples and tests.</td></tr>
+          <tr><td><code>SetFileSystem</code>, <code>DefaultFileSystem</code></td><td>Manage the process-wide file system backend used by package helpers.</td></tr>
+          <tr><td><code>GUI</code></td><td>Interface for reading and setting host window chrome.</td></tr>
+          <tr><td><code>WindowChrome</code>, <code>WindowControls</code>, <code>WindowTitlebarMode</code></td><td>Native window chrome model that can expose layout tokens to Vugra.</td></tr>
+          <tr><td><code>WindowControlsXToken</code> and related constants</td><td>Token names consumed by layout through `env(vugra-window-controls-*, fallback)`.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="wasm-api">Wasm API</h2>
+      <p>The wasm API is compiled only for `GOOS=js GOARCH=wasm` and bridges browser events and canvas rendering into Vugra runtime semantics.</p>
+      <table>
+        <thead><tr><th>Symbol</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>NewCanvasRenderer(canvas, width, height)</code></td><td>Creates a canvas 2D renderer for Vugra render commands. The renderer uses CSS-pixel logical coordinates, a device-pixel-ratio backing store, and the current SVG subset for `rect`, `circle`, and simple path commands.</td></tr>
+          <tr><td><code>NewCanvasMeasurer(canvas)</code></td><td>Creates a wasm text measurer backed by the canvas 2D `measureText()` API, so browser layout measurement and canvas text rendering use the same host font metrics path.</td></tr>
+          <tr><td><code>InstallPointerEvents</code></td><td>Installs a click-oriented pointer bridge.</td></tr>
+          <tr><td><code>InstallPointerEventDetails</code></td><td>Installs click, hover, drag, double click, and context menu event bridging.</td></tr>
+          <tr><td><code>InstallScrollEvents</code></td><td>Installs wheel event bridging.</td></tr>
+          <tr><td><code>InstallKeyboardEvents</code></td><td>Installs key dispatch for focus/global keyboard handling, including Tab and Shift+Tab focus traversal, Backspace, Delete, ArrowLeft, ArrowRight, Home, End, and Mod+A editing for focused text inputs through the runtime key path.</td></tr>
+          <tr><td><code>InstallTextEvents</code></td><td>Installs text input dispatch for printable keys, IME composition commits, and plain text paste events at the focused runtime caret or selection.</td></tr>
+          <tr><td><code>SyncAccessibility(containerID, commands, focusedID)</code></td><td>Mirrors the current renderer command frame into a hidden DOM accessibility tree with roles, names, checked state, disabled state, focused state, and layout metadata.</td></tr>
+          <tr><td><code>InstallAccessibilityEvents(containerID, dispatch)</code></td><td>Installs the legacy hidden DOM accessibility click bridge that maps mirror activation back to Vugra pointer dispatch coordinates.</td></tr>
+          <tr><td><code>InstallAccessibilityEventHandlers(containerID, handlers)</code></td><td>Installs hidden DOM accessibility bridges for focus, click, key, and text actions.</td></tr>
+          <tr><td><code>SetStatus(id, text)</code></td><td>Updates a host DOM status element.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="cli-api">CLI</h2>
+      <table>
+        <thead><tr><th>Command</th><th>Output</th></tr></thead>
+        <tbody>
+          <tr><td><code>parse &lt;file&gt;</code></td><td>JSON SFC blocks and diagnostics.</td></tr>
+          <tr><td><code>check &lt;file&gt;</code></td><td>Validation result and diagnostics.</td></tr>
+          <tr><td><code>ir &lt;file&gt;</code></td><td>Component IR JSON.</td></tr>
+          <tr><td><code>frame &lt;file&gt;</code></td><td>First renderer command frame.</td></tr>
+          <tr><td><code>vello-ops &lt;file&gt;</code></td><td>Vello scene-operation JSON.</td></tr>
+          <tr><td><code>png &lt;file&gt; &lt;out.png&gt;</code></td><td>Software-rendered PNG.</td></tr>
+          <tr><td><code>wasm &lt;file-or-project&gt; &lt;out-dir&gt;</code></td><td>Browser bundle containing `index.html`, `app.wasm`, and `wasm_exec.js`; project inputs use config title and viewport size.</td></tr>
+          <tr><td><code>wasm-run &lt;file-or-project&gt; [addr]</code></td><td>Builds a temporary browser bundle and starts the local wasm preview server.</td></tr>
+          <tr><td><code>wasm-serve &lt;bundle-dir&gt; [addr]</code></td><td>Static local preview server for a generated bundle; `.wasm` assets are served as `application/wasm`.</td></tr>
+          <tr><td><code>native-window &lt;file&gt;</code></td><td>macOS native host; `go run ./cmd/vugra` auto-enables the native backend on macOS with cgo.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <p>API stability note: the facade packages are the intended app-facing surface. `internal/*` packages can change as the compiler/runtime boundary matures.</p>
+      </div>
+
+      <div class="footer">
+        <p>This page documents the current public API shape in the repository.</p>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

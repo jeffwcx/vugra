@@ -1,0 +1,16 @@
+diagnostics=0
+nodes=9
+node[0].kind=text span=1:1@20-2:1@21 value="\n"
+node[1].kind=comment span=2:1@21-2:17@37 value=" keep me "
+node[2].kind=text span=2:17@37-3:1@38 value="\n"
+node[3].kind=element tag=label span=3:1@38-3:31@68 start=3:1@38-3:19@56 end=3:23@60-3:31@68
+node[3].attr[0]=for kind=static arg= value="name" hasValue=true name=3:8@45-3:11@48 valueSpan=3:13@50-3:17@54
+node[3].child[0].kind=text span=3:19@56-3:23@60 value="Name"
+node[4].kind=text span=3:31@68-4:1@69 value="\n"
+node[5].kind=element tag=input span=4:1@69-4:22@90 start=4:1@69-4:22@90
+node[5].attr[0]=:value kind=boundProp arg=value value="name" hasValue=true name=4:8@76-4:14@82 valueSpan=4:16@84-4:20@88
+node[5].attr[0].directive=bind arg=value expr="name"
+node[6].kind=text span=4:22@90-5:1@91 value="\n"
+node[7].kind=element tag=img span=5:1@91-5:25@115 start=5:1@91-5:25@115
+node[7].attr[0]=src kind=static arg= value="avatar.png" hasValue=true name=5:6@96-5:9@99 valueSpan=5:11@101-5:21@111
+node[8].kind=text span=5:25@115-6:1@116 value="\n"

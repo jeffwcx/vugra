@@ -1,0 +1,14 @@
+{
+  "$schema": "../vugra.config.schema.json",
+  "name": "vugra-docs-site",
+  "version": "0.1.0",
+  "entry": "App.vue",
+  "app": {
+    "title": "Vugra Documentation",
+    "width": 1180,
+    "height": 760
+  },
+  "runtime": {
+    "layout": "go"
+  }
+}

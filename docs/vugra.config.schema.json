@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vugra.dev/schemas/vugra.config.schema.json",
+  "title": "Vugra Project Config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "entry"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string"
+    },
+    "entry": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Project-relative .vue entry component."
+    },
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 800
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 600
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "renderer": {
+          "type": "string",
+          "enum": ["vello-native", "vello", "software"]
+        },
+        "layout": {
+          "type": "string",
+          "enum": ["go", "css"]
+        }
+      }
+    },
+    "scripts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "onLaunch": {
+          "type": "array",
+          "description": "Declarative host/system actions run before the app is mounted.",
+          "items": {
+            "$ref": "#/$defs/systemAction"
+          }
+        }
+      }
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gui": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "onLaunch": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/systemAction"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "systemAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["use"],
+      "properties": {
+        "use": {
+          "type": "string",
+          "enum": ["window.setChrome"]
+        },
+        "titlebar": {
+          "type": "string",
+          "enum": ["default", "hidden"]
+        },
+        "controls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "height": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        }
+      }
+    }
+  }
+}

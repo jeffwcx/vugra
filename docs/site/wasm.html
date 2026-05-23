@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vugra Wasm Guide</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="index.html">Vugra</a>
+      <p class="tagline">Browser bundle workflow for the wasm canvas host.</p>
+      <p class="nav-title">Docs</p>
+      <ul class="nav-list">
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="manual.html">Manual</a></li>
+        <li><a href="api.html">API</a></li>
+        <li><a aria-current="page" href="wasm.html">Wasm</a></li>
+      </ul>
+      <p class="nav-title">Sections</p>
+      <ul class="nav-list">
+        <li><a href="#build">Build</a></li>
+        <li><a href="#serve">Serve</a></li>
+        <li><a href="#events">Events</a></li>
+        <li><a href="#limits">Limits</a></li>
+      </ul>
+    </aside>
+    <main class="content">
+      <p class="eyebrow">Wasm</p>
+      <h1>Run Vugra in a browser</h1>
+      <p class="lead">The current browser path compiles a `.vue` component into Go wasm and renders Vugra commands into a `<canvas>` through the wasm canvas host.</p>
+
+      <h2 id="build">Build a Bundle</h2>
+      <p>Use the high-level `wasm` command from the repository root:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/counter/Counter.vue /tmp/vugra-counter-wasm</code></pre>
+      <p>The same command accepts a project directory or config file:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/finder /tmp/vugra-finder-wasm
+go run ./cmd/vugra wasm examples/finder/vugra.config.json /tmp/vugra-finder-wasm</code></pre>
+      <p>Project inputs resolve `entry` from `vugra.config.json` and use `app.title`, `app.width`, `app.height`, and `runtime.layout` for the generated host page, canvas runtime constraints, and layout engine selection.</p>
+      <p>The output directory contains three files:</p>
+      <table>
+        <thead><tr><th>File</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>index.html</code></td><td>Static host page with a canvas and Go wasm loader.</td></tr>
+          <tr><td><code>app.wasm</code></td><td>Compiled Vugra component app for `GOOS=js GOARCH=wasm`.</td></tr>
+          <tr><td><code>wasm_exec.js</code></td><td>Go runtime JavaScript copied from the local Go toolchain.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="serve">Serve Locally</h2>
+      <p>Build and serve a temporary preview bundle in one command:</p>
+      <pre><code>go run ./cmd/vugra wasm-run examples/counter/Counter.vue</code></pre>
+      <p>Use Vugra's static bundle server to preview an existing output directory:</p>
+      <pre><code>go run ./cmd/vugra wasm-serve /tmp/vugra-counter-wasm</code></pre>
+      <p>Any static file server also works for the same output directory:</p>
+      <pre><code>python3 -m http.server 8000 --directory /tmp/vugra-counter-wasm</code></pre>
+      <p>Open `http://localhost:8000`. The server is needed because the generated host page loads `app.wasm` with `fetch()`, and browsers restrict wasm loading from `file://` pages.</p>
+
+      <h2 id="smoke">Smoke Test</h2>
+      <p>The repository includes a Node-based smoke runner that loads `app.wasm` with Go's `wasm_exec.js`, provides a minimal DOM/canvas host, and verifies startup, status updates, canvas drawing, event listener installation, and device-pixel-ratio scaling.</p>
+      <pre><code>node tools/wasm-smoke/run.mjs /tmp/vugra-counter-wasm</code></pre>
+      <p>For a real browser check, the Chrome/CDP runner serves the bundle over local HTTP, waits for the wasm app to report `Running`, verifies non-background canvas pixels, reads the hidden accessibility mirror, and can write a PNG screenshot:</p>
+      <pre><code>node tools/wasm-browser-check/run.mjs /tmp/vugra-counter-wasm --screenshot /tmp/vugra-counter-browser.png</code></pre>
+      <p>The same browser runner can dispatch real Chrome mouse input and hidden accessibility mirror actions:</p>
+      <pre><code>node tools/wasm-browser-check/run.mjs /tmp/vugra-counter-wasm --click 30,60 --expect-text 1 --expect-a11y button,+
+node tools/wasm-browser-check/run.mjs /tmp/vugra-counter-wasm --a11y-click button,+ --expect-text 1 --expect-a11y button,+</code></pre>
+      <p>Accessibility focus is separate from activation: focusing a mirrored node updates Vugra focus state without firing the button, and later key activation still routes through the focused runtime element:</p>
+      <pre><code>node tools/wasm-browser-check/run.mjs /tmp/vugra-counter-wasm --a11y-focus button,+ --expect-text 0 --expect-a11y-focused button,+
+node tools/wasm-browser-check/run.mjs /tmp/vugra-counter-wasm --a11y-focus button,+ --key Enter --expect-text 1 --expect-a11y-focused button,+</code></pre>
+      <p>Keyboard focus and activation are checked in Chrome by tabbing to a canvas-rendered button and dispatching Enter or Space through the wasm key bridge:</p>
+      <pre><code>node tools/wasm-browser-check/run.mjs /tmp/vugra-counter-wasm --key Tab --key Enter --expect-text 1 --expect-a11y-focused button,+
+node tools/wasm-browser-check/run.mjs /tmp/vugra-counter-wasm --key Tab --key ' ' --expect-text 1 --expect-a11y-focused button,+</code></pre>
+      <p>Forward and reverse keyboard focus traversal are verified with a two-button example, including Shift+Tab wrapping and reverse movement:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/focus/FocusCycle.vue /tmp/vugra-focus-wasm
+node tools/wasm-browser-check/run.mjs /tmp/vugra-focus-wasm --key Tab --key Tab --expect-a11y-focused button,Second
+node tools/wasm-browser-check/run.mjs /tmp/vugra-focus-wasm --key Tab --key Tab --key Shift+Tab --expect-a11y-focused button,First
+node tools/wasm-browser-check/run.mjs /tmp/vugra-focus-wasm --key Shift+Tab --expect-a11y-focused button,Second</code></pre>
+      <p>Project bundles can be checked against config-driven host metadata and initial accessibility content:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/finder /tmp/vugra-finder-wasm
+node tools/wasm-browser-check/run.mjs /tmp/vugra-finder-wasm --expect-title 'Finder Lite' --expect-canvas 800,600 --expect-a11y text,Favorites --expect-a11y text,Workspace</code></pre>
+      <p>It also verifies real Chrome keyboard text input, caret movement, selection replacement, and accessibility mirror text/key actions:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/textinput/TextInput.vue /tmp/vugra-textinput-wasm
+node tools/wasm-browser-check/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --text abc --expect-text abc --expect-a11y-focused textbox,abc
+node tools/wasm-browser-check/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --text abc --key ArrowLeft --text X --expect-text abXc --expect-a11y textbox,abXc
+node tools/wasm-browser-check/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --text abc --key Home --text X --key End --text Y --expect-text XabcY --expect-a11y textbox,XabcY
+node tools/wasm-browser-check/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --text draft --key Mod+A --text final --expect-text final --expect-a11y textbox,final
+node tools/wasm-browser-check/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --a11y-text textbox,,xy --a11y-key textbox,xy,Backspace --expect-text x --expect-a11y textbox,x
+node tools/wasm-browser-check/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --compose 你好 --expect-text 你好 --expect-a11y textbox,你好
+node tools/wasm-browser-check/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --paste pasted --expect-text pasted --expect-a11y textbox,pasted</code></pre>
+      <p>Checkbox state is checked in Chrome through the mirrored `aria-checked` state and focused marker:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/checkbox/CheckboxBox.vue /tmp/vugra-checkbox-wasm
+node tools/wasm-browser-check/run.mjs /tmp/vugra-checkbox-wasm --click 20,20 --expect-text true --expect-a11y-checked checkbox,,true --expect-a11y-focused checkbox,</code></pre>
+      <p>Disabled controls expose `aria-disabled` and are removed from activation/focus paths, so canvas clicks and accessibility actions do not fire their handlers:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/disabled/DisabledButton.vue /tmp/vugra-disabled-wasm
+node tools/wasm-browser-check/run.mjs /tmp/vugra-disabled-wasm --click 20,50 --expect-text 0 --expect-a11y-disabled button,Disabled,true
+node tools/wasm-browser-check/run.mjs /tmp/vugra-disabled-wasm --a11y-click button,Disabled --expect-text 0 --expect-a11y-disabled button,Disabled,true
+node tools/wasm-browser-check/run.mjs /tmp/vugra-disabled-wasm --a11y-focus button,Disabled --expect-text 0 --expect-a11y-disabled button,Disabled,true --expect-a11y-not-focused button,Disabled</code></pre>
+      <p>Wheel scrolling is verified in Chrome by dispatching a wheel event and checking the mirrored layout position after the runtime updates the scroll offset:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/scroll/ScrollBox.vue /tmp/vugra-scroll-wasm
+node tools/wasm-browser-check/run.mjs /tmp/vugra-scroll-wasm --wheel 10,10,30 --expect-a11y-y-lt text,Delta,60 --expect-a11y text,Delta</code></pre>
+      <p>Canvas rendering can be checked in Chrome by sampling concrete canvas pixels after the wasm app renders:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/styled/StyledBox.vue /tmp/vugra-styled-wasm
+node tools/wasm-browser-check/run.mjs /tmp/vugra-styled-wasm --expect-text Styled --expect-pixel 10,10,#123456
+go run ./cmd/vugra wasm examples/background/BackgroundBox.vue /tmp/vugra-background-wasm
+node tools/wasm-browser-check/run.mjs /tmp/vugra-background-wasm --expect-text Background --expect-pixel 10,10,#3b0764
+go run ./cmd/vugra wasm examples/opacity/OpacityBox.vue /tmp/vugra-opacity-wasm
+node tools/wasm-browser-check/run.mjs /tmp/vugra-opacity-wasm --expect-text Opacity --expect-pixel 10,10,#90aff3
+go run ./cmd/vugra wasm examples/svg/SVGDemo.vue /tmp/vugra-svg-wasm
+node tools/wasm-browser-check/run.mjs /tmp/vugra-svg-wasm --expect-pixel 24,36,#2563eb --expect-pixel 76,28,#f97316</code></pre>
+      <p>Pointer detail events are verified in Chrome with a focused example for hover, drag, double click, and context menu dispatch:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/pointer/PointerBox.vue /tmp/vugra-pointer-wasm
+node tools/wasm-browser-check/run.mjs /tmp/vugra-pointer-wasm --hover 20,20 --expect-text hover
+node tools/wasm-browser-check/run.mjs /tmp/vugra-pointer-wasm --drag 20,20,45,20 --expect-text 'drag 25'
+node tools/wasm-browser-check/run.mjs /tmp/vugra-pointer-wasm --dblclick 20,20 --expect-text double
+node tools/wasm-browser-check/run.mjs /tmp/vugra-pointer-wasm --contextmenu 20,20 --expect-text menu</code></pre>
+      <p>For interactive components, the runner can also dispatch a logical-coordinate click and assert that expected text appears after the runtime flushes the update:</p>
+      <pre><code>node tools/wasm-smoke/run.mjs /tmp/vugra-counter-wasm --click 30,60 --expect-text 1 --expect-a11y button,+</code></pre>
+      <p>Accessibility mirror actions can be routed back through the same pointer pipeline:</p>
+      <pre><code>node tools/wasm-smoke/run.mjs /tmp/vugra-counter-wasm --a11y-click button,+ --expect-text 1</code></pre>
+      <p>The mock smoke runner also covers reverse focus traversal and disabled accessibility focus without launching Chrome:</p>
+      <pre><code>node tools/wasm-smoke/run.mjs /tmp/vugra-focus-wasm --key Tab --key Tab --key Shift+Tab --expect-a11y-focused button,First
+node tools/wasm-smoke/run.mjs /tmp/vugra-disabled-wasm --a11y-focus button,Disabled --expect-text 0 --expect-a11y-disabled button,Disabled,true --expect-a11y-not-focused button,Disabled</code></pre>
+      <p>Text input can be checked by focusing an input coordinate and sending printable key events:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/textinput/TextInput.vue /tmp/vugra-textinput-wasm
+node tools/wasm-smoke/run.mjs /tmp/vugra-textinput-wasm --key Tab --expect-a11y-focused textbox,
+node tools/wasm-smoke/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --text abc --expect-text abc --expect-a11y-focused textbox,abc</code></pre>
+      <p>Backspace deletes the last rune from the focused bound text input:</p>
+      <pre><code>node tools/wasm-smoke/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --text abc --key Backspace --expect-text ab</code></pre>
+      <p>Focused text inputs also keep a runtime caret and selection range, so browser key events can move the caret or replace the selected text without depending on DOM input state. Application and host code can use the public `TextSelection`, `TextSelectionFor`, `SetTextSelection`, `CollapseTextSelection`, `CollapseTextSelectionFor`, `SelectedText`, and `SelectedTextFor` APIs for the same renderer-neutral rune-offset range model:</p>
+      <pre><code>node tools/wasm-smoke/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --text abc --key ArrowLeft --text X --expect-text abXc
+node tools/wasm-smoke/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --text abc --key Home --text X --key End --text Y --expect-text XabcY
+node tools/wasm-smoke/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --text draft --key Mod+A --text final --expect-text final</code></pre>
+      <p>Rendered documentation text can also be selected inside the canvas. The runtime maps pointer drags over text commands into document text selections and paints selection highlight commands before drawing the selected glyphs:</p>
+      <pre><code>node tools/wasm-smoke/run.mjs /tmp/vugra-docs-site --drag 330,70,780,70 --expect-selection</code></pre>
+      <p>The hidden accessibility mirror can also forward text and key actions into the same focused runtime input path:</p>
+      <pre><code>node tools/wasm-smoke/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --a11y-text textbox,,xy --a11y-key textbox,xy,Backspace --expect-text x</code></pre>
+      <p>IME composition commits through `compositionend`, so composed text can be dispatched without leaking intermediate keydown events into state:</p>
+      <pre><code>node tools/wasm-smoke/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --compose 你好 --expect-text 你好</code></pre>
+      <p>Plain text paste events are routed through the same text input path:</p>
+      <pre><code>node tools/wasm-smoke/run.mjs /tmp/vugra-textinput-wasm --click 20,20 --paste pasted --expect-text pasted</code></pre>
+      <p>Checkbox controls can be checked by clicking the bound input and asserting both the updated text binding and canvas checkmark path:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/checkbox/CheckboxBox.vue /tmp/vugra-checkbox-wasm
+node tools/wasm-smoke/run.mjs /tmp/vugra-checkbox-wasm --click 20,20 --expect-text true --expect-checkmark --expect-a11y-checked checkbox,,true</code></pre>
+      <p>Renderer style propagation can be checked by asserting canvas colors and line width:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/styled/StyledBox.vue /tmp/vugra-styled-wasm
+node tools/wasm-smoke/run.mjs /tmp/vugra-styled-wasm --expect-text Styled --expect-fill '#123456' --expect-stroke '#abcdef' --expect-fill '#fedcba' --expect-line-width 3 --expect-rounded</code></pre>
+      <p>The CSS Profile v1 `background` shorthand supports simple color values and lowers to the same renderable background color contract:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/background/BackgroundBox.vue /tmp/vugra-background-wasm
+node tools/wasm-smoke/run.mjs /tmp/vugra-background-wasm --expect-text Background --expect-fill '#3b0764' --expect-stroke '#f59e0b'</code></pre>
+      <p>Opacity is propagated through the renderer-neutral style contract and checked through the canvas `globalAlpha` bridge:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/opacity/OpacityBox.vue /tmp/vugra-opacity-wasm
+node tools/wasm-smoke/run.mjs /tmp/vugra-opacity-wasm --expect-text Opacity --expect-fill '#2563eb' --expect-stroke '#0f172a' --expect-alpha 0.5</code></pre>
+<p>Wheel scrolling can be checked by dispatching a wheel event into a scroll container and asserting that the latest text draw moved upward:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/scroll/ScrollBox.vue /tmp/vugra-scroll-wasm
+node tools/wasm-smoke/run.mjs /tmp/vugra-scroll-wasm --wheel 10,10,30 --expect-latest-text-y-lt Delta,70 --expect-clip</code></pre>
+      <pre><code>go run ./cmd/vugra wasm examples/svg/SVGDemo.vue /tmp/vugra-svg-wasm
+node tools/wasm-smoke/run.mjs /tmp/vugra-svg-wasm --expect-fill '#2563eb' --expect-fill '#f97316' --expect-stroke '#ffffff' --expect-line-width 3 --expect-arc --expect-svg-path</code></pre>
+      <p>A successful smoke run prints JSON containing `status`, backing-store size, CSS size, draw call count, and installed listener names. A successful browser check prints JSON containing `status`, canvas size, non-background pixel count, and mirrored accessibility nodes.</p>
+
+      <h2 id="events">Event Bridge</h2>
+      <p>The generated wasm main installs event bridges from browser input into Vugra runtime methods:</p>
+      <table>
+        <thead><tr><th>Browser Input</th><th>Runtime Dispatch</th></tr></thead>
+        <tbody>
+          <tr><td>mouse down / click</td><td><code>DispatchPointerEvent</code></td></tr>
+          <tr><td>mouse move</td><td><code>DispatchHover</code></td></tr>
+          <tr><td>drag</td><td><code>DispatchDrag</code></td></tr>
+          <tr><td>double click</td><td><code>DispatchDoubleClick</code></td></tr>
+          <tr><td>context menu</td><td><code>DispatchContextMenu</code></td></tr>
+          <tr><td>wheel</td><td><code>DispatchScroll</code></td></tr>
+          <tr><td>keyboard, caret/selection editing, IME composition, and paste</td><td><code>DispatchKey</code> and <code>DispatchTextInput</code></td></tr>
+        </tbody>
+      </table>
+      <p>The canvas host keeps Vugra coordinates in logical CSS pixels. At runtime it sizes the canvas backing store with `devicePixelRatio` and applies a canvas transform, so high-DPI displays get sharper output while pointer and scroll coordinates still match layout coordinates. Browser wasm layout uses a canvas-backed measurer, so text wrapping and text drawing share the browser's `measureText()` metrics path.</p>
+      <p>The wasm host also mirrors Vugra's renderer-neutral accessibility tree into a hidden DOM container. The mirror exposes roles, names, checked state, disabled state, focused state, and layout metadata for the current frame while the visible UI continues to render through canvas. Focus, click, key, and text actions from the mirror are translated back into Vugra runtime dispatch.</p>
+      <p>Native and wasm hosts share the same runtime key names for focus traversal and text editing, including Tab, Shift+Tab, ArrowLeft, ArrowRight, Home, End, Backspace, Delete, Enter, Space, Escape, and Mod+A.</p>
+
+      <h2 id="verified">Verified Examples</h2>
+      <p>The current bundle workflow has been verified by command-line build and smoke execution for:</p>
+      <pre><code>go run ./cmd/vugra wasm examples/counter/Counter.vue /tmp/vugra-audit-counter
+go run ./cmd/vugra wasm examples/finder /tmp/vugra-audit-finder</code></pre>
+      <p>Both commands generate `index.html`, `app.wasm`, and `wasm_exec.js`.</p>
+
+      <h2 id="limits">Current Limits</h2>
+      <p><span class="status">Implemented</span> Canvas 2D rendering, canvas-backed wasm text measurement, generated wasm main, host page generation, pointer/scroll/keyboard/text/caret/selection/IME composition/paste bridges, hidden DOM accessibility mirror with focus/click/key/text action bridges, inline and referenced SVG subset rendering, reusable bundle command, and Chrome/CDP browser QA with screenshot output.</p>
+      <p><span class="limit">Still future work</span> WebGPU wasm rendering, stricter native/browser font parity guarantees, richer platform accessibility actions beyond activation and text input, and a production widget library.</p>
+
+      <div class="footer">
+        <p>Wasm support is browser-runnable through canvas today; WebGPU/Vello wasm remains a separate backend milestone.</p>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

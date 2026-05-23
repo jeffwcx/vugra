@@ -1,0 +1,6 @@
+boxes=1
+box[0]=element tag=div role=group text="" rect=0,0,200,80 children=2
+box[0].child[0]=element tag=p role=text text="" rect=16,16,168,20 children=1
+box[0].child[0].child[0]=text tag= role=text text="7" rect=16,16,8,20 children=0
+box[0].child[1]=element tag=button role=button text="" rect=16,44,168,20 children=1
+box[0].child[1].child[0]=text tag= role=text text="+" rect=16,44,8,20 children=0

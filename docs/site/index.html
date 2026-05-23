@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vugra Documentation</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="index.html">Vugra</a>
+      <p class="tagline">A Vue-like SFC framework with Go state and native/wasm render targets.</p>
+      <p class="nav-title">Docs</p>
+      <ul class="nav-list">
+        <li><a aria-current="page" href="index.html">Overview</a></li>
+        <li><a href="manual.html">Manual</a></li>
+        <li><a href="api.html">API</a></li>
+        <li><a href="wasm.html">Wasm</a></li>
+      </ul>
+      <p class="nav-title">Reference</p>
+      <ul class="nav-list">
+        <li><a href="../project-config.md">Project Config</a></li>
+        <li><a href="../css-profile-v1.md">CSS Profile v1</a></li>
+        <li><a href="../../README.md">Repository README</a></li>
+      </ul>
+    </aside>
+    <main class="content">
+      <p class="eyebrow">Documentation Site</p>
+      <h1>Build Vugra components with standard HTML templates and Go logic.</h1>
+      <p class="lead">Vugra compiles `.vue` single-file components into framework-owned IR, mounts them through a Signal-driven runtime, and renders through backend-neutral commands for native and wasm hosts.</p>
+
+      <div class="grid">
+        <section class="card">
+          <h3>Manual</h3>
+          <p>Learn the SFC shape, supported template syntax, Go state model, CSS profile, project config, and CLI workflow.</p>
+          <p><a href="manual.html">Read the manual</a></p>
+        </section>
+        <section class="card">
+          <h3>API</h3>
+          <p>Reference the stable public facade in `pkg/vugra`, public signals in `pkg/signal`, and the CLI commands.</p>
+          <p><a href="api.html">Open the API reference</a></p>
+        </section>
+        <section class="card">
+          <h3>Wasm</h3>
+          <p>Compile a `.vue` component into a browser bundle with `index.html`, `app.wasm`, and `wasm_exec.js`.</p>
+          <p><a href="wasm.html">Run in the browser</a></p>
+        </section>
+      </div>
+
+      <h2>Current Status</h2>
+      <p><span class="status">Available now</span> SFC parsing, HTML template parsing, Go metadata extraction, IR validation, Signal runtime updates, component imports, flex/grid/block layout, event routing, native window support, software rendering, Vello native rendering, and wasm canvas bundles.</p>
+      <p><span class="limit">Not complete yet</span> WebGPU wasm rendering, full browser DOM behavior, full CSS cascade, richer widgets, platform accessibility bridges, and production LSP integration remain future work.</p>
+
+      <h2>Quick Start</h2>
+      <pre><code>go test ./...
+go run ./cmd/vugra check examples/counter/Counter.vue
+go run ./cmd/vugra wasm examples/counter/Counter.vue /tmp/vugra-counter-wasm
+	go run ./cmd/vugra wasm-serve /tmp/vugra-counter-wasm</code></pre>
+
+      <p>Open `http://localhost:8000` after starting the server. The HTTP server is only a static file host for the generated wasm assets.</p>
+
+      <h2>Design Boundary</h2>
+      <p>Vugra uses HTML syntax, but it is not a wrapper around browser DOM semantics. Components compile into Vugra IR first, then runtime/layout/render layers decide how to present the same component on native or wasm targets.</p>
+
+      <div class="footer">
+        <p>The canonical docs site is implemented in `docs/site/App.vue` and built with `vugra wasm docs/site`; these static pages remain as compatibility reference material.</p>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

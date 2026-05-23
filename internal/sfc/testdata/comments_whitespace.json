@@ -1,0 +1,16 @@
+path=Component.vue
+diagnostics=0
+blocks=2
+block[0].type=template lang=
+block[0].span=4:1@24-6:12@71
+block[0].startTag=4:1@24-4:11@34
+block[0].contentSpan=4:11@34-6:1@60
+block[0].endTag=6:1@60-6:12@71
+block[0].content="\n  <div>{{ count }}</div>\n"
+block[1].type=script lang=go
+block[1].span=9:1@97-13:10@148
+block[1].startTag=9:1@97-11:2@118
+block[1].contentSpan=11:2@118-13:1@139
+block[1].endTag=13:1@139-13:10@148
+block[1].attr[0]=lang value="go" hasValue=true name=10:3@107-10:7@111 valueSpan=10:9@113-10:11@115
+block[1].content="\ntype State struct{}\n"

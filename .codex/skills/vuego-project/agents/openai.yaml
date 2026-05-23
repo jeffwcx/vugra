@@ -1,0 +1,7 @@
+interface:
+  display_name: "Vuego Project"
+  short_description: "Guide Vuego compiler, runtime, and LSP work"
+  default_prompt: "Use $vuego-project to design or review a Vuego compiler, runtime, renderer, or LSP change."
+
+policy:
+  allow_implicit_invocation: true

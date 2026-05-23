@@ -1,0 +1,7 @@
+diagnostics=0
+state=State fields=3
+field[0]=Count alias=count type=signal.Int signal=true exported=true tagged=true span=10:5@225-10:37@257 typeSpan=10:11@231-10:21@241
+field[1]=Name alias=displayName type=signal.Signal[string] signal=true exported=true tagged=true span=11:5@262-11:53@310 typeSpan=11:10@267-11:31@288
+field[2]=hidden alias=hidden type=int signal=false exported=false tagged=false span=12:5@315-12:15@325 typeSpan=12:12@322-12:15@325
+methods=1
+method[0]=Inc receiver=*State pointer=true exported=true span=15:1@329-17:2@389 name=15:17@345-15:20@348

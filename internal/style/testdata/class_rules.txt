@@ -1,0 +1,11 @@
+diagnostics=0
+rules=2
+rule[0]=.counter class=counter span=21:1@201-27:2@301 declarations=5
+rule[0].decl[0]=display:flex name=22:3@214-22:10@221 value=22:12@223-22:16@227
+rule[0].decl[1]=flex-direction:column name=23:3@231-23:17@245 value=23:19@247-23:25@253
+rule[0].decl[2]=gap:8px name=24:3@257-24:6@260 value=24:8@262-24:11@265
+rule[0].decl[3]=padding:16px name=25:3@269-25:10@276 value=25:12@278-25:16@282
+rule[0].decl[4]=width:320px name=26:3@286-26:8@291 value=26:10@293-26:15@298
+rule[1]=.button class=button span=29:1@303-32:2@353 declarations=2
+rule[1].decl[0]=height:44px name=30:3@315-30:9@321 value=30:11@323-30:15@327
+rule[1].decl[1]=align-items:center name=31:3@331-31:14@342 value=31:16@344-31:22@350

@@ -1,0 +1,29 @@
+{
+  "$schema": "../../docs/vugra.config.schema.json",
+  "name": "finder-lite",
+  "version": "0.1.0",
+  "entry": "FinderLite.vue",
+  "app": {
+    "title": "Finder Lite",
+    "width": 800,
+    "height": 600
+  },
+  "runtime": {
+    "renderer": "vello-native",
+    "layout": "go"
+  },
+  "scripts": {
+    "onLaunch": [
+      {
+        "use": "window.setChrome",
+        "titlebar": "hidden",
+        "controls": {
+          "x": 18,
+          "y": 18,
+          "width": 72,
+          "height": 28
+        }
+      }
+    ]
+  }
+}

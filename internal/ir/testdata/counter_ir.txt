@@ -1,0 +1,16 @@
+name=Counter
+diagnostics=0
+nodes=3
+node[0].kind=text span=1:1@0-2:1@1 value="\n"
+node[1].kind=element tag=div span=2:1@1-5:7@105 props=1 events=0 children=5
+node[1].prop[0]=class value="counter" binding= bound=false span=2:6@6-2:11@11
+node[1].child[0].kind=text span=2:22@22-3:3@25 value="\n  "
+node[1].child[1].kind=element tag=p span=3:3@25-3:21@43 props=0 events=0 children=1
+node[1].child[1].child[0].kind=interpolation binding=count goField=Count span=3:6@28-3:17@39
+node[1].child[2].kind=text span=3:21@43-4:3@46 value="\n  "
+node[1].child[3].kind=element tag=button span=4:3@46-4:55@98 props=1 events=1 children=1
+node[1].child[3].prop[0]=disabled value="" binding=disabled bound=true span=4:24@67-4:33@76
+node[1].child[3].event[0]=click method=Inc span=4:11@54-4:17@60
+node[1].child[3].child[0].kind=text span=4:45@88-4:46@89 value="+"
+node[1].child[4].kind=text span=4:55@98-5:1@99 value="\n"
+node[2].kind=text span=5:7@105-6:1@106 value="\n"

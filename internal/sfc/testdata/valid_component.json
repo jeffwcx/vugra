@@ -1,0 +1,22 @@
+path=Component.vue
+diagnostics=0
+blocks=3
+block[0].type=template lang=
+block[0].span=1:1@0-3:12@66
+block[0].startTag=1:1@0-1:11@10
+block[0].contentSpan=1:11@10-3:1@55
+block[0].endTag=3:1@55-3:12@66
+block[0].content="\n  <button @click=\"Inc\">{{ count }}</button>\n"
+block[1].type=script lang=go
+block[1].span=5:1@68-9:10@155
+block[1].startTag=5:1@68-5:19@86
+block[1].contentSpan=5:19@86-9:1@146
+block[1].endTag=9:1@146-9:10@155
+block[1].attr[0]=lang value="go" hasValue=true name=5:9@76-5:13@80 valueSpan=5:15@82-5:17@84
+block[1].content="\ntype State struct {\n    Count signal.Int `vugra:\"count\"`\n}\n"
+block[2].type=style lang=
+block[2].span=11:1@157-13:9@198
+block[2].startTag=11:1@157-11:8@164
+block[2].contentSpan=11:8@164-13:1@190
+block[2].endTag=13:1@190-13:9@198
+block[2].content="\nbutton { padding: 8px; }\n"

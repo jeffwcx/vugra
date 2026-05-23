@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vugra Manual</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="index.html">Vugra</a>
+      <p class="tagline">Manual for authoring Vugra `.vue` components.</p>
+      <p class="nav-title">Docs</p>
+      <ul class="nav-list">
+        <li><a href="index.html">Overview</a></li>
+        <li><a aria-current="page" href="manual.html">Manual</a></li>
+        <li><a href="api.html">API</a></li>
+        <li><a href="wasm.html">Wasm</a></li>
+      </ul>
+      <p class="nav-title">Sections</p>
+      <ul class="nav-list">
+        <li><a href="#sfc">SFC Format</a></li>
+        <li><a href="#template">Template</a></li>
+        <li><a href="#go">Go State</a></li>
+        <li><a href="#styles">Styles</a></li>
+        <li><a href="#components">Components</a></li>
+        <li><a href="#cli">CLI</a></li>
+      </ul>
+    </aside>
+    <main class="content">
+      <p class="eyebrow">Manual</p>
+      <h1>Authoring Vugra components</h1>
+      <p class="lead">A Vugra component is a `.vue` single-file component with standard HTML template syntax, real Go in `<script lang="go">`, and a deliberately small renderer-neutral CSS profile.</p>
+
+      <h2 id="sfc">SFC Format</h2>
+      <p>Vugra recognizes three blocks: `<template>`, `<script lang="go">`, and `<style>`. The compiler preserves source ranges so diagnostics can point back to the original `.vue` file.</p>
+      <pre><code>&lt;template&gt;
+  &lt;div class="counter"&gt;
+    &lt;p&gt;{{ count }}&lt;/p&gt;
+    &lt;button @click="Inc"&gt;+&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+
+&lt;script lang="go"&gt;
+import "github.com/vugra/vugra/pkg/signal"
+
+type State struct {
+    Count signal.Int `vugra:"count"`
+}
+
+func (s *State) Inc() {
+    s.Count.Set(s.Count.Get() + 1)
+}
+&lt;/script&gt;</code></pre>
+
+      <h2 id="template">Template</h2>
+      <p>Templates use HTML parsing rules where possible. Vugra supports a deliberate subset of tags and directives that compile cleanly to Vugra IR.</p>
+      <table>
+        <thead><tr><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Common tags</td><td>Available</td><td>`div`, `span`, `p`, `button`, `input`, headings, lists, `img`, `label`, and inline or referenced SVG subsets.</td></tr>
+          <tr><td>`{{ expr }}`</td><td>Available</td><td>Bindings map to Go state metadata.</td></tr>
+          <tr><td>`v-if`</td><td>Available</td><td>Uses truthy state bindings.</td></tr>
+          <tr><td>`v-for`</td><td>Available</td><td>Supports the current list-oriented MVP.</td></tr>
+          <tr><td>`:prop`</td><td>Available</td><td>Dynamic props bind to state names.</td></tr>
+          <tr><td>`@event`</td><td>Available</td><td>Pointer, keyboard, text, hover, drag, scroll, context menu, and double click are routed through Vugra events.</td></tr>
+          <tr><td>Full DOM APIs</td><td>Not supported</td><td>Component semantics must stay portable across native and wasm hosts.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="go">Go State</h2>
+      <p>`<script lang="go">` contains real Go source. State is discovered from a `State` type, signal fields, `vugra` struct tags, and methods on `*State`.</p>
+      <pre><code>type State struct {
+    Title signal.String `vugra:"title"`
+    Ready signal.Bool   `vugra:"ready"`
+}
+
+func (s *State) Toggle() {
+    s.Ready.Set(!s.Ready.Get())
+}</code></pre>
+      <p>Use explicit `signal.Signal[T]`, `signal.Int`, `signal.Bool`, or `signal.String`. Direct field mutation is not the reactivity model.</p>
+
+      <h2 id="styles">Styles</h2>
+      <p>Vugra's CSS Profile v1 is renderer-neutral. Class selectors are supported now; unsupported properties are diagnostics or no-ops depending on the layer.</p>
+      <p>Important supported areas include block layout, flex row/column, flex wrap, deterministic grid support for examples, gap, padding, margin, min/max size, background color, border, border radius, text sizing, line height, text align, and overflow.</p>
+      <p>Read the canonical profile in <a href="../css-profile-v1.md">CSS Profile v1</a>.</p>
+
+      <h2 id="components">Components</h2>
+      <p>Components can import other `.vue` files from Go script imports. Imported components are analyzed and lowered into the parent component IR before code generation.</p>
+      <pre><code>import Badge "./Badge.vue"</code></pre>
+      <p>Child component state factories are generated into the compiled component package. Repeated imports of the same component path are deduplicated during generation.</p>
+
+      <h2 id="cli">CLI</h2>
+      <table>
+        <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>vugra check &lt;file&gt;</code></td><td>Parse and validate SFC, template, style, Go metadata, and IR.</td></tr>
+          <tr><td><code>vugra ir &lt;file&gt;</code></td><td>Print renderer-neutral component IR.</td></tr>
+          <tr><td><code>vugra frame &lt;file&gt;</code></td><td>Render the first test frame with layout rectangles.</td></tr>
+          <tr><td><code>vugra png &lt;file&gt; &lt;out.png&gt;</code></td><td>Render a software PNG.</td></tr>
+          <tr><td><code>vugra wasm &lt;file-or-project&gt; &lt;out-dir&gt;</code></td><td>Build a browser bundle for the wasm canvas host.</td></tr>
+          <tr><td><code>vugra wasm-run &lt;file-or-project&gt; [addr]</code></td><td>Build a temporary wasm browser bundle and serve it locally.</td></tr>
+          <tr><td><code>vugra wasm-serve &lt;bundle-dir&gt; [addr]</code></td><td>Serve a generated wasm bundle locally as static files with the wasm MIME type.</td></tr>
+          <tr><td><code>vugra run [config-or-dir]</code></td><td>Run a project config with the native host.</td></tr>
+        </tbody>
+      </table>
+      <p>The wasm command accepts a `.vue` file, a project directory, or a `vugra.config.json` path. Project inputs use `app.title`, `app.width`, `app.height`, and the config-relative `entry` component.</p>
+
+      <div class="footer">
+        <p>Manual scope matches the current repository implementation and intentionally excludes future browser-only DOM behavior.</p>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
