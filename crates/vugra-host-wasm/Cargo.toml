@@ -1,0 +1,11 @@
+[package]
+name = "vugra-host-wasm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vugra-core = { path = "../vugra-core" }
+vugra-layout = { path = "../vugra-layout" }
+vugra-render = { path = "../vugra-render" }
+vugra-scene = { path = "../vugra-scene" }
+

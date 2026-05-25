@@ -1,0 +1,20 @@
+[package]
+name = "finder-rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+chrono = "0.4"
+vugra-abi = { path = "../../crates/vugra-abi" }
+vugra-core = { path = "../../crates/vugra-core" }
+vugra-host-native = { path = "../../crates/vugra-host-native" }
+vugra-ir = { path = "../../crates/vugra-ir" }
+vugra-layout = { path = "../../crates/vugra-layout" }
+vugra-render = { path = "../../crates/vugra-render" }
+vugra-render-vello = { path = "../../crates/vugra-render-vello" }
+vugra-render-wgpu = { path = "../../crates/vugra-render-wgpu" }
+vugra-rs = { path = "../../crates/vugra-rs" }
+vugra-rs-codegen = { path = "../../crates/vugra-rs-codegen" }
+vugra-scene = { path = "../../crates/vugra-scene" }
+vugra-system = { path = "../../crates/vugra-system" }

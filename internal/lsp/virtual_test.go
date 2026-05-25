@@ -37,3 +37,18 @@ type State struct {}
 		t.Fatalf("missing mapped style diagnostic: %+v", files.Diagnostics)
 	}
 }
+
+func TestBuildVirtualFilesUsesRustScriptLanguage(t *testing.T) {
+	result := compiler.Compile("Component.vue", []byte(`
+<template><div>{{ count }}</div></template>
+<script lang="rust">
+pub struct State {
+    pub count: Signal<i32>,
+}
+</script>
+`))
+	files := lsp.BuildVirtualFiles("Component", result)
+	if files.Script.FileName != "Component.script.rs" || files.Script.Language != "rust" {
+		t.Fatalf("script virtual file = %+v", files.Script)
+	}
+}

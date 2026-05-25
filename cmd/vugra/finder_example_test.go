@@ -221,6 +221,76 @@ func TestFinderLiteNavigationKeyboardAndRename(t *testing.T) {
 	}
 }
 
+func TestFinderLiteSelectAllCoversRowsOutsideProjectedWindow(t *testing.T) {
+	fixture := newFinderTestFixture(t)
+	extra := filepath.Join(fixture.documents, "Zebra.md")
+	if err := os.WriteFile(extra, []byte("extra"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mounted, target := mountFinderLiteWithFixture(t, fixture)
+	if !frameContainsText(target.LastFrame(), "13 items · Current path: "+fixture.documents) {
+		t.Fatalf("fixture did not expose 13 document rows")
+	}
+
+	list := findElementByClass(target.LastFrame(), "file-list")
+	if !mounted.DispatchPointer(list.Rect.X+2, list.Rect.Y+2) {
+		t.Fatal("file list focus failed")
+	}
+	if !mounted.DispatchKey("Mod+A") {
+		t.Fatal("select all failed")
+	}
+	mounted.Flush()
+	if !frameContainsText(target.LastFrame(), "13 items selected") {
+		t.Fatalf("select all did not cover off-screen row")
+	}
+	if !mounted.DispatchKey("Delete") {
+		t.Fatal("delete failed")
+	}
+	mounted.Flush()
+	if !frameContainsText(target.LastFrame(), "0 items · Current path: "+fixture.documents) {
+		t.Fatalf("delete did not remove all selected rows")
+	}
+}
+
+func TestFinderLiteSearchFiltersNamesOnly(t *testing.T) {
+	mounted, target, fixture := mountFinderLite(t)
+	search := findElementByClass(target.LastFrame(), "search")
+	if !mounted.DispatchPointer(search.Rect.X+2, search.Rect.Y+2) {
+		t.Fatal("search focus failed")
+	}
+	if !mounted.DispatchTextInput("folder") {
+		t.Fatal("search text input failed")
+	}
+	mounted.Flush()
+	if !frameContainsText(target.LastFrame(), "0 items · Current path: "+fixture.documents) {
+		t.Fatalf("search matched non-name fields")
+	}
+	if frameContainsText(target.LastFrame(), "Design") {
+		t.Fatalf("search matched folder kind instead of name only")
+	}
+}
+
+func TestFinderLiteSearchTrimsQuery(t *testing.T) {
+	mounted, target, fixture := mountFinderLite(t)
+	search := findElementByClass(target.LastFrame(), "search")
+	if !mounted.DispatchPointer(search.Rect.X+2, search.Rect.Y+2) {
+		t.Fatal("search focus failed")
+	}
+	if !mounted.DispatchTextInput(" road ") {
+		t.Fatal("search text input failed")
+	}
+	mounted.Flush()
+	if !frameContainsText(target.LastFrame(), "1 items · Current path: "+fixture.documents) {
+		t.Fatalf("search did not trim query")
+	}
+	if !frameContainsText(target.LastFrame(), "Roadmap.md") {
+		t.Fatalf("trimmed search did not match Roadmap.md")
+	}
+	if frameContainsText(target.LastFrame(), "Budget 2026.xlsx") {
+		t.Fatalf("trimmed search did not filter unrelated rows")
+	}
+}
+
 type finderTestFixture struct {
 	root      string
 	documents string
@@ -233,6 +303,12 @@ type finderTestFixture struct {
 func mountFinderLite(t *testing.T) (*runtime.App, *renderer.TestRenderer, finderTestFixture) {
 	t.Helper()
 	fixture := newFinderTestFixture(t)
+	mounted, target := mountFinderLiteWithFixture(t, fixture)
+	return mounted, target, fixture
+}
+
+func mountFinderLiteWithFixture(t *testing.T, fixture finderTestFixture) (*runtime.App, *renderer.TestRenderer) {
+	t.Helper()
 	_, file, _, ok := stdruntime.Caller(0)
 	if !ok {
 		t.Fatal("locate test file")
@@ -259,7 +335,7 @@ func mountFinderLite(t *testing.T) (*runtime.App, *renderer.TestRenderer, finder
 		Constraints: layout.Constraints{Width: 800, Height: 600},
 		Measurer:    layout.FixedMeasurer{CharWidth: 8, LineHeight: 20},
 	})
-	return mounted, target, fixture
+	return mounted, target
 }
 
 func newFinderTestFixture(t *testing.T) finderTestFixture {

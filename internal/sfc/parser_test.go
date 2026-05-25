@@ -76,6 +76,12 @@ func TestParseDiagnostics(t *testing.T) {
 			codes: []string{"sfc.unsupported_script_lang"},
 		},
 		{
+			name: "rust script language",
+			src: `<template></template>
+<script lang="rust">pub struct State {}</script>`,
+			codes: nil,
+		},
+		{
 			name: "missing closing tag",
 			src: `<template>
   <div></div>
@@ -100,6 +106,9 @@ func TestParseDiagnostics(t *testing.T) {
 				if !contains(got, want) {
 					t.Fatalf("expected diagnostic %s, got %v", want, got)
 				}
+			}
+			if len(tt.codes) == 0 && len(got) != 0 {
+				t.Fatalf("unexpected diagnostics: %v", got)
 			}
 		})
 	}

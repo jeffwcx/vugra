@@ -1,0 +1,8 @@
+[package]
+name = "vugra-scene"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vugra-ir = { path = "../vugra-ir" }
+vugra-layout = { path = "../vugra-layout" }

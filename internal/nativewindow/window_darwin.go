@@ -553,6 +553,10 @@ func (w *Window) Render(commands []renderer.Command) {
 	C.vuego_update_window(w.view, (*C.uchar)(unsafe.Pointer(&w.pixels[0])), C.int(pixelWidth), C.int(pixelHeight))
 }
 
+func (w *Window) Pixels() []byte {
+	return append([]byte(nil), w.pixels...)
+}
+
 func (w *Window) ensureVelloNative() error {
 	if w.velloNative != nil {
 		return nil

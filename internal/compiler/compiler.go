@@ -8,19 +8,21 @@ import (
 	"github.com/vugra/vugra/internal/componentfile"
 	"github.com/vugra/vugra/internal/goanalysis"
 	"github.com/vugra/vugra/internal/ir"
+	"github.com/vugra/vugra/internal/rustanalysis"
 	"github.com/vugra/vugra/internal/sfc"
 	"github.com/vugra/vugra/internal/style"
 	"github.com/vugra/vugra/internal/template"
 )
 
 type Result struct {
-	SFC      *sfc.File           `json:"sfc"`
-	Template *template.Document  `json:"template,omitempty"`
-	Style    *style.Stylesheet   `json:"style,omitempty"`
-	StyleCSS string              `json:"styleCSS,omitempty"`
-	Go       goanalysis.Metadata `json:"go"`
-	IR       *ir.Component       `json:"ir,omitempty"`
-	Imports  []ImportResult      `json:"-"`
+	SFC      *sfc.File             `json:"sfc"`
+	Template *template.Document    `json:"template,omitempty"`
+	Style    *style.Stylesheet     `json:"style,omitempty"`
+	StyleCSS string                `json:"styleCSS,omitempty"`
+	Go       goanalysis.Metadata   `json:"go"`
+	Rust     rustanalysis.Metadata `json:"rust,omitempty"`
+	IR       *ir.Component         `json:"ir,omitempty"`
+	Imports  []ImportResult        `json:"-"`
 }
 
 type resolvedImport struct {
@@ -56,12 +58,21 @@ func compile(path string, source []byte, stack map[string]bool) *Result {
 			Column: sfcFile.Template.ContentSpan.Start.Column,
 		})
 	}
-	if sfcFile.Script != nil {
+	var script ir.ScriptMetadata
+	if sfcFile.Script != nil && sfcFile.Script.Lang == "rust" {
+		result.Rust = rustanalysis.Analyze(sfcFile.Script.Content, rustanalysis.BasePosition{
+			Offset: sfcFile.Script.ContentSpan.Start.Offset,
+			Line:   sfcFile.Script.ContentSpan.Start.Line,
+			Column: sfcFile.Script.ContentSpan.Start.Column,
+		})
+		script = scriptFromRust(result.Rust)
+	} else if sfcFile.Script != nil {
 		result.Go = goanalysis.Analyze(sfcFile.Script.Content, goanalysis.BasePosition{
 			Offset: sfcFile.Script.ContentSpan.Start.Offset,
 			Line:   sfcFile.Script.ContentSpan.Start.Line,
 			Column: sfcFile.Script.ContentSpan.Start.Column,
 		})
+		script = scriptFromGo(result.Go)
 	}
 	if sfcFile.Style != nil {
 		result.StyleCSS = sfcFile.Style.Content
@@ -78,6 +89,7 @@ func compile(path string, source []byte, stack map[string]bool) *Result {
 		Name:     path,
 		Template: result.Template,
 		Go:       result.Go,
+		Script:   script,
 		Imports:  irImports(resolvedImports),
 	})
 	return result
@@ -183,6 +195,104 @@ func mergeImportedStyles(result *Result, imports []resolvedImport) {
 	}
 }
 
+func scriptFromGo(metadata goanalysis.Metadata) ir.ScriptMetadata {
+	out := ir.ScriptMetadata{}
+	if metadata.State != nil {
+		state := &ir.StateMetadata{TypeName: metadata.State.TypeName}
+		for _, field := range metadata.State.Fields {
+			state.Fields = append(state.Fields, ir.FieldMetadata{
+				Name:     field.Name,
+				Alias:    field.Alias,
+				Type:     field.Type,
+				Span:     spanFromGo(field.Span),
+				Optional: !field.HasVugraTag || field.Optional,
+				Default:  field.Default,
+				Provide:  field.Provide,
+				Inject:   field.Inject,
+			})
+		}
+		out.State = state
+	}
+	for _, method := range metadata.Methods {
+		out.Methods = append(out.Methods, ir.MethodMetadata{
+			Name: method.Name,
+			Span: spanFromGo(method.Span),
+		})
+	}
+	for _, emit := range metadata.Emits {
+		out.Emits = append(out.Emits, ir.EmitMetadata{
+			Method: emit.Method,
+			Event:  emit.Event,
+			Span:   spanFromGo(emit.Span),
+		})
+	}
+	for _, lifecycle := range metadata.Lifecycle {
+		out.Lifecycle = append(out.Lifecycle, ir.LifecycleMetadata{
+			Hook:   lifecycle.Hook,
+			Method: lifecycle.Method,
+			Span:   spanFromGo(lifecycle.Span),
+		})
+	}
+	for _, diag := range metadata.Diagnostics {
+		out.Diagnostics = append(out.Diagnostics, ir.Diagnostic{
+			Code:     diag.Code,
+			Message:  diag.Message,
+			Severity: diag.Severity,
+			Span:     spanFromGo(diag.Span),
+		})
+	}
+	return out
+}
+
+func scriptFromRust(metadata rustanalysis.Metadata) ir.ScriptMetadata {
+	out := ir.ScriptMetadata{}
+	if metadata.State != nil {
+		state := &ir.StateMetadata{TypeName: metadata.State.TypeName}
+		for _, field := range metadata.State.Fields {
+			state.Fields = append(state.Fields, ir.FieldMetadata{
+				Name:     field.Name,
+				Alias:    field.Alias,
+				Type:     field.Type,
+				Span:     spanFromRust(field.Span),
+				Optional: true,
+			})
+		}
+		out.State = state
+	}
+	for _, method := range metadata.Methods {
+		if !method.Exported {
+			continue
+		}
+		out.Methods = append(out.Methods, ir.MethodMetadata{
+			Name: method.Name,
+			Span: spanFromRust(method.Span),
+		})
+	}
+	for _, diag := range metadata.Diagnostics {
+		out.Diagnostics = append(out.Diagnostics, ir.Diagnostic{
+			Code:     diag.Code,
+			Message:  diag.Message,
+			Severity: diag.Severity,
+			Span:     spanFromRust(diag.Span),
+		})
+	}
+	return out
+}
+
+func spanFromGo(span goanalysis.Span) ir.Span {
+	return ir.Span{
+		Start: ir.Position(span.Start),
+		End:   ir.Position(span.End),
+	}
+}
+
+func spanFromRust(span rustanalysis.Span) ir.Span {
+	return ir.Span{
+		Start: ir.Position(span.Start),
+		End:   ir.Position(span.End),
+	}
+}
+
 func (r *Result) Diagnostics() []Diagnostic {
 	var out []Diagnostic
 	if r.SFC != nil {
@@ -225,6 +335,17 @@ func (r *Result) Diagnostics() []Diagnostic {
 		}
 	}
 	for _, diag := range r.Go.Diagnostics {
+		out = append(out, Diagnostic{
+			Code:     diag.Code,
+			Message:  diag.Message,
+			Severity: diag.Severity,
+			Span: Span{
+				Start: Position(diag.Span.Start),
+				End:   Position(diag.Span.End),
+			},
+		})
+	}
+	for _, diag := range r.Rust.Diagnostics {
 		out = append(out, Diagnostic{
 			Code:     diag.Code,
 			Message:  diag.Message,

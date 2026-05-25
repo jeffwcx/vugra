@@ -1,0 +1,11 @@
+[package]
+name = "vugra-abi"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vugra-core = { path = "../vugra-core" }
+vugra-host-native = { path = "../vugra-host-native" }
+vugra-ir = { path = "../vugra-ir" }
+vugra-layout = { path = "../vugra-layout" }
+

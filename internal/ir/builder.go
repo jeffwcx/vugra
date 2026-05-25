@@ -14,14 +14,60 @@ type BuildInput struct {
 	Name     string
 	Template *template.Document
 	Go       goanalysis.Metadata
+	Script   ScriptMetadata
 	Imports  []Import
 }
 
+type ScriptMetadata struct {
+	State       *StateMetadata
+	Methods     []MethodMetadata
+	Emits       []EmitMetadata
+	Lifecycle   []LifecycleMetadata
+	Diagnostics []Diagnostic
+}
+
+type StateMetadata struct {
+	TypeName string
+	Fields   []FieldMetadata
+}
+
+type FieldMetadata struct {
+	Name     string
+	Alias    string
+	Type     string
+	Span     Span
+	Optional bool
+	Default  string
+	Provide  bool
+	Inject   bool
+}
+
+type MethodMetadata struct {
+	Name string
+	Span Span
+}
+
+type EmitMetadata struct {
+	Method string
+	Event  string
+	Span   Span
+}
+
+type LifecycleMetadata struct {
+	Hook   string
+	Method string
+	Span   Span
+}
+
 func Build(input BuildInput) *Component {
+	script := input.Script
+	if script.State == nil && len(script.Methods) == 0 && len(script.Diagnostics) == 0 {
+		script = scriptFromGo(input.Go)
+	}
 	b := builder{
 		component:  &Component{Name: input.Name, Imports: input.Imports},
-		state:      map[string]goanalysis.Field{},
-		methods:    map[string]goanalysis.Method{},
+		state:      map[string]FieldMetadata{},
+		methods:    map[string]MethodMetadata{},
 		aliases:    map[string]struct{}{},
 		imports:    map[string]*Component{},
 		imported:   map[string]struct{}{},
@@ -33,26 +79,26 @@ func Build(input BuildInput) *Component {
 			b.imports[imported.Alias] = imported.Component
 		}
 	}
-	if input.Go.State != nil {
-		for _, field := range input.Go.State.Fields {
+	if script.State != nil {
+		for _, field := range script.State.Fields {
 			b.state[field.Alias] = field
 		}
 	}
 	b.component.PropNames = sortedPropNames(b.state)
-	b.component.Props = propDefs(input.Go.State)
-	b.component.Provides = provideDefs(input.Go.State)
-	b.component.Injects = injectDefs(input.Go.State)
-	for _, method := range input.Go.Methods {
+	b.component.Props = propDefs(script.State)
+	b.component.Provides = provideDefs(script.State)
+	b.component.Injects = injectDefs(script.State)
+	for _, method := range script.Methods {
 		b.methods[method.Name] = method
 	}
-	for _, emit := range input.Go.Emits {
-		b.component.Emits = append(b.component.Emits, Emit{Method: emit.Method, Event: emit.Event, Span: fromGoSpan(emit.Span)})
+	for _, emit := range script.Emits {
+		b.component.Emits = append(b.component.Emits, Emit{Method: emit.Method, Event: emit.Event, Span: emit.Span})
 	}
-	for _, lifecycle := range input.Go.Lifecycle {
-		b.component.Lifecycle = append(b.component.Lifecycle, Lifecycle{Hook: lifecycle.Hook, Method: lifecycle.Method, Span: fromGoSpan(lifecycle.Span)})
+	for _, lifecycle := range script.Lifecycle {
+		b.component.Lifecycle = append(b.component.Lifecycle, Lifecycle{Hook: lifecycle.Hook, Method: lifecycle.Method, Span: lifecycle.Span})
 	}
-	for _, diag := range input.Go.Diagnostics {
-		b.component.Diagnostics = append(b.component.Diagnostics, fromGoDiagnostic(diag))
+	for _, diag := range script.Diagnostics {
+		b.component.Diagnostics = append(b.component.Diagnostics, diag)
 	}
 	if input.Template == nil {
 		b.error("ir.missing_template_ast", "missing template AST", Span{})
@@ -72,8 +118,8 @@ func Build(input BuildInput) *Component {
 
 type builder struct {
 	component  *Component
-	state      map[string]goanalysis.Field
-	methods    map[string]goanalysis.Method
+	state      map[string]FieldMetadata
+	methods    map[string]MethodMetadata
 	aliases    map[string]struct{}
 	imports    map[string]*Component
 	imported   map[string]struct{}
@@ -662,6 +708,50 @@ func fromGoSpan(span goanalysis.Span) Span {
 	}
 }
 
+func scriptFromGo(metadata goanalysis.Metadata) ScriptMetadata {
+	out := ScriptMetadata{}
+	if metadata.State != nil {
+		state := &StateMetadata{TypeName: metadata.State.TypeName}
+		for _, field := range metadata.State.Fields {
+			state.Fields = append(state.Fields, FieldMetadata{
+				Name:     field.Name,
+				Alias:    field.Alias,
+				Type:     field.Type,
+				Span:     fromGoSpan(field.Span),
+				Optional: !field.HasVugraTag || field.Optional,
+				Default:  field.Default,
+				Provide:  field.Provide,
+				Inject:   field.Inject,
+			})
+		}
+		out.State = state
+	}
+	for _, method := range metadata.Methods {
+		out.Methods = append(out.Methods, MethodMetadata{
+			Name: method.Name,
+			Span: fromGoSpan(method.Span),
+		})
+	}
+	for _, emit := range metadata.Emits {
+		out.Emits = append(out.Emits, EmitMetadata{
+			Method: emit.Method,
+			Event:  emit.Event,
+			Span:   fromGoSpan(emit.Span),
+		})
+	}
+	for _, lifecycle := range metadata.Lifecycle {
+		out.Lifecycle = append(out.Lifecycle, LifecycleMetadata{
+			Hook:   lifecycle.Hook,
+			Method: lifecycle.Method,
+			Span:   fromGoSpan(lifecycle.Span),
+		})
+	}
+	for _, diag := range metadata.Diagnostics {
+		out.Diagnostics = append(out.Diagnostics, fromGoDiagnostic(diag))
+	}
+	return out
+}
+
 func cloneNodes(nodes []Node) []Node {
 	out := make([]Node, 0, len(nodes))
 	for _, node := range nodes {
@@ -898,7 +988,7 @@ func applyComponentNode(node Node, props map[string]Prop, slots map[string][]Nod
 	}
 }
 
-func sortedPropNames(state map[string]goanalysis.Field) []string {
+func sortedPropNames(state map[string]FieldMetadata) []string {
 	out := make([]string, 0, len(state))
 	for name := range state {
 		out = append(out, name)
@@ -907,7 +997,7 @@ func sortedPropNames(state map[string]goanalysis.Field) []string {
 	return out
 }
 
-func propDefs(state *goanalysis.StateMetadata) []PropDef {
+func propDefs(state *StateMetadata) []PropDef {
 	if state == nil {
 		return nil
 	}
@@ -917,9 +1007,9 @@ func propDefs(state *goanalysis.StateMetadata) []PropDef {
 			Name:     field.Alias,
 			GoField:  field.Name,
 			Type:     field.Type,
-			Required: field.HasVugraTag && !field.Optional,
+			Required: !field.Optional,
 			Default:  field.Default,
-			Span:     fromGoSpan(field.Span),
+			Span:     field.Span,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -928,7 +1018,7 @@ func propDefs(state *goanalysis.StateMetadata) []PropDef {
 	return out
 }
 
-func provideDefs(state *goanalysis.StateMetadata) []ProvideDef {
+func provideDefs(state *StateMetadata) []ProvideDef {
 	if state == nil {
 		return nil
 	}
@@ -940,7 +1030,7 @@ func provideDefs(state *goanalysis.StateMetadata) []ProvideDef {
 		out = append(out, ProvideDef{
 			Name:    field.Alias,
 			Binding: field.Alias,
-			Span:    fromGoSpan(field.Span),
+			Span:    field.Span,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -949,7 +1039,7 @@ func provideDefs(state *goanalysis.StateMetadata) []ProvideDef {
 	return out
 }
 
-func injectDefs(state *goanalysis.StateMetadata) []InjectDef {
+func injectDefs(state *StateMetadata) []InjectDef {
 	if state == nil {
 		return nil
 	}
@@ -963,7 +1053,7 @@ func injectDefs(state *goanalysis.StateMetadata) []InjectDef {
 			GoField: field.Name,
 			Type:    field.Type,
 			Default: field.Default,
-			Span:    fromGoSpan(field.Span),
+			Span:    field.Span,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {

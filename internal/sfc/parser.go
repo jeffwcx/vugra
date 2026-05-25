@@ -95,8 +95,8 @@ func (p *parser) parse() *File {
 		}
 		if block.Type == "script" {
 			block.Lang = attrValue(block.Attrs, "lang")
-			if block.Lang != "go" {
-				p.error("sfc.unsupported_script_lang", `<script> blocks must use lang="go"`, start.offset, start.end)
+			if block.Lang != "go" && block.Lang != "rust" {
+				p.error("sfc.unsupported_script_lang", `<script> blocks must use lang="go" or lang="rust"`, start.offset, start.end)
 			}
 		}
 
@@ -109,7 +109,7 @@ func (p *parser) parse() *File {
 		p.error("sfc.missing_template", "missing <template> block", 0, 0)
 	}
 	if file.Script == nil {
-		p.error("sfc.missing_script", `missing <script lang="go"> block`, 0, 0)
+		p.error("sfc.missing_script", `missing <script lang="go"> or <script lang="rust"> block`, 0, 0)
 	}
 
 	file.Diagnostics = append(file.Diagnostics, p.diags...)

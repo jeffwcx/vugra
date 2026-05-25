@@ -250,13 +250,15 @@ func LibraryPath() (string, error) {
 	}
 	for _, candidate := range []string{
 		filepath.Join(root, "tools", "vello-native", "target", "debug", "libvello_native.dylib"),
+		filepath.Join(root, "tools", "vello-native", "target", "debug", "deps", "libvello_native.dylib"),
 		filepath.Join(root, "tools", "vello-native", "target", "release", "libvello_native.dylib"),
+		filepath.Join(root, "tools", "vello-native", "target", "release", "deps", "libvello_native.dylib"),
 	} {
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("locate tools/vello-native/target/{debug,release}/libvello_native.dylib; run cargo build --manifest-path tools/vello-native/Cargo.toml")
+	return "", fmt.Errorf("locate tools/vello-native/target/{debug,debug/deps,release,release/deps}/libvello_native.dylib; run cargo build --manifest-path tools/vello-native/Cargo.toml")
 }
 
 type Measurer struct {

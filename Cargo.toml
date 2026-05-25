@@ -1,0 +1,25 @@
+[workspace]
+members = [
+    "crates/vugra-abi",
+    "crates/vugra-core",
+    "crates/vugra-go",
+    "crates/vugra-host-native",
+    "crates/vugra-ir",
+    "crates/vugra-layout",
+    "crates/vugra-render",
+    "crates/vugra-render-vello",
+    "crates/vugra-render-wgpu",
+    "crates/vugra-rs",
+    "crates/vugra-rs-codegen",
+    "crates/vugra-scene",
+    "crates/vugra-system",
+    "crates/vugra-text",
+    "crates/vugra-host-wasm",
+    "examples/finder-rust",
+]
+exclude = [
+    "tools/css-layout",
+    "tools/vello-native",
+    "tools/vello-sidecar",
+]
+resolver = "2"

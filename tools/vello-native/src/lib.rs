@@ -6,7 +6,7 @@ use std::ffi::{c_char, CStr, CString};
 use std::num::NonZeroUsize;
 use std::os::raw::c_int;
 use std::ptr;
-use vello::peniko::{Color, Fill, FontData};
+use vello::peniko::{BlendMode, Color, Fill, Font};
 use vello::wgpu;
 
 #[derive(Debug, Deserialize)]
@@ -106,7 +106,7 @@ pub struct VugraNativeRenderer {
     queue: wgpu::Queue,
     renderer: vello::Renderer,
     font_system: FontSystem,
-    font_cache: HashMap<(cosmic_text::fontdb::ID, cosmic_text::fontdb::Weight), FontData>,
+    font_cache: HashMap<(cosmic_text::fontdb::ID, cosmic_text::fontdb::Weight), Font>,
     pixels: Vec<u8>,
     status: CString,
 }
@@ -117,10 +117,10 @@ impl VugraNativeRenderer {
         let renderer = vello::Renderer::new(
             &device,
             vello::RendererOptions {
+                surface_format: None,
                 use_cpu: false,
                 antialiasing_support: vello::AaSupport::area_only(),
                 num_init_threads: NonZeroUsize::new(1),
-                pipeline_cache: None,
             },
         )
         .context("create Vello renderer")?;
@@ -199,9 +199,19 @@ impl VugraNativeRenderer {
         let line_height = line_height(op, font_size);
         let metrics = Metrics::new(font_size, line_height);
         let mut buffer = Buffer::new(&mut self.font_system, metrics);
-        buffer.set_size(Some(text_layout_width(op, font_size)), Some(op.rect.height));
+        buffer.set_size(
+            &mut self.font_system,
+            Some(text_layout_width(op, font_size)),
+            Some(op.rect.height),
+        );
         let attrs = Attrs::new().family(Family::SansSerif);
-        buffer.set_text(&op.text, &attrs, Shaping::Advanced, text_align(op));
+        buffer.set_text(
+            &mut self.font_system,
+            &op.text,
+            &attrs,
+            Shaping::Advanced,
+            text_align(op),
+        );
         buffer.shape_until_scroll(&mut self.font_system, false);
 
         let color = text_color(op);
@@ -256,10 +266,17 @@ impl VugraNativeRenderer {
             let mut buffer =
                 Buffer::new(&mut self.font_system, Metrics::new(font_size, line_height));
             buffer.set_size(
+                &mut self.font_system,
                 Some(run.advance.max(text_run_width(run, font_size))),
                 Some(line_height),
             );
-            buffer.set_text(&run.text, &attrs, Shaping::Advanced, None);
+            buffer.set_text(
+                &mut self.font_system,
+                &run.text,
+                &attrs,
+                Shaping::Advanced,
+                None,
+            );
             buffer.shape_until_scroll(&mut self.font_system, false);
             for shaped in buffer.layout_runs() {
                 for glyph in shaped.glyphs {
@@ -304,10 +321,17 @@ impl VugraNativeRenderer {
             };
             let mut buffer = Buffer::new(&mut self.font_system, Metrics::new(font_size, height));
             buffer.set_size(
+                &mut self.font_system,
                 Some(line.width.max(text_line_width(&line.text, font_size))),
                 Some(height),
             );
-            buffer.set_text(&line.text, &attrs, Shaping::Advanced, text_align(op));
+            buffer.set_text(
+                &mut self.font_system,
+                &line.text,
+                &attrs,
+                Shaping::Advanced,
+                text_align(op),
+            );
             buffer.shape_until_scroll(&mut self.font_system, false);
             for shaped in buffer.layout_runs() {
                 for glyph in shaped.glyphs {
@@ -337,7 +361,7 @@ impl VugraNativeRenderer {
     fn font_data(
         &mut self,
         key: (cosmic_text::fontdb::ID, cosmic_text::fontdb::Weight),
-    ) -> Result<FontData> {
+    ) -> Result<Font> {
         if let Some(data) = self.font_cache.get(&key) {
             return Ok(data.clone());
         }
@@ -351,7 +375,7 @@ impl VugraNativeRenderer {
             .face(key.0)
             .map(|face| face.index)
             .unwrap_or(0);
-        let data = FontData::new(font.data().to_vec().into(), index);
+        let data = Font::new(font.data().to_vec().into(), index);
         self.font_cache.insert(key, data.clone());
         Ok(data)
     }
@@ -405,9 +429,9 @@ impl VugraNativeRenderer {
             });
         encoder.copy_texture_to_buffer(
             texture.as_image_copy(),
-            wgpu::TexelCopyBufferInfo {
+            wgpu::ImageCopyBuffer {
                 buffer: &output_buffer,
-                layout: wgpu::TexelCopyBufferLayout {
+                layout: wgpu::ImageDataLayout {
                     offset: 0,
                     bytes_per_row: Some(padded_bytes_per_row),
                     rows_per_image: Some(self.height),
@@ -426,9 +450,7 @@ impl VugraNativeRenderer {
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
             sender.send(result).ok();
         });
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .context("wait for readback")?;
+        self.device.poll(wgpu::Maintain::Wait);
         receiver
             .receive()
             .await
@@ -714,20 +736,21 @@ fn attr_f64(node: roxmltree::Node<'_, '_>, name: &str) -> Option<f64> {
 }
 
 async fn create_device() -> Result<(wgpu::Device, wgpu::Queue)> {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions::default())
         .await
         .context("request wgpu adapter")?;
     adapter
-        .request_device(&wgpu::DeviceDescriptor {
-            label: Some("vugra-vello-native-device"),
-            required_features: wgpu::Features::empty(),
-            required_limits: adapter.limits(),
-            experimental_features: wgpu::ExperimentalFeatures::disabled(),
-            memory_hints: wgpu::MemoryHints::Performance,
-            trace: wgpu::Trace::Off,
-        })
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                label: Some("vugra-vello-native-device"),
+                required_features: wgpu::Features::empty(),
+                required_limits: adapter.limits(),
+                memory_hints: wgpu::MemoryHints::Performance,
+            },
+            None,
+        )
         .await
         .context("request wgpu device")
 }
@@ -809,7 +832,12 @@ fn push_clip(scene: &mut vello::Scene, op: &Op) {
         return;
     }
     let rect = shape(op);
-    scene.push_clip_layer(Fill::NonZero, vello::kurbo::Affine::IDENTITY, &rect);
+    scene.push_layer(
+        BlendMode::default(),
+        1.0,
+        vello::kurbo::Affine::IDENTITY,
+        &rect,
+    );
 }
 
 fn clips_overflow(overflow: &str) -> bool {
@@ -947,10 +975,11 @@ fn measure_text(
     for line in text.split('\n') {
         let mut buffer = Buffer::new(font_system, Metrics::new(font_size, line_height));
         buffer.set_size(
+            font_system,
             Some(text_line_width(line, font_size).max(1.0)),
             Some(line_height),
         );
-        buffer.set_text(line, &attrs, Shaping::Advanced, None);
+        buffer.set_text(font_system, line, &attrs, Shaping::Advanced, None);
         buffer.shape_until_scroll(font_system, false);
         for run in buffer.layout_runs() {
             let run_width = run

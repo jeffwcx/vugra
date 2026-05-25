@@ -4,6 +4,7 @@ package nativewindow
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -252,7 +253,7 @@ func TestNativeWindowResizeUpdatesLayoutAndSurface(t *testing.T) {
 
 func TestNativeWindowDefaultRendererUsesVelloNativeWhenAvailable(t *testing.T) {
 	t.Setenv("VUGRA_NATIVE_RENDERER", "")
-	if _, err := os.Stat("../../tools/vello-native/target/debug/libvello_native.dylib"); err != nil {
+	if !velloNativeDylibAvailable() {
 		t.Skip("build vello-native first: cargo build --manifest-path tools/vello-native/Cargo.toml")
 	}
 	window, err := New("Vugra", 320, 200)
@@ -302,7 +303,7 @@ func TestNativeWindowVelloNativeRendererInitializesLazily(t *testing.T) {
 			Rect: renderer.Rect{X: 16, Y: 16, Width: 120, Height: 40},
 		},
 	})
-	if _, err := os.Stat("../../tools/vello-native/target/debug/libvello_native.dylib"); err == nil {
+	if velloNativeDylibAvailable() {
 		if window.velloNative == nil {
 			t.Fatal("expected vello-native renderer after first render")
 		}
@@ -336,14 +337,20 @@ func TestNativeWindowCanUseVelloRenderer(t *testing.T) {
 	if window.velloRenderer.Status == "" {
 		t.Fatal("expected Vello renderer status")
 	}
+	if strings.Contains(window.velloRenderer.Status, "fallback:") {
+		if !strings.Contains(window.velloRenderer.Status, "run Vello sidecar") {
+			t.Fatalf("unexpected Vello fallback status: %q", window.velloRenderer.Status)
+		}
+		return
+	}
 	if !strings.Contains(window.velloRenderer.Status, `"render":"texture"`) {
-		t.Fatalf("expected Vello texture render status, got %q", window.velloRenderer.Status)
+		t.Fatalf("expected Vello texture render status or sidecar fallback, got %q", window.velloRenderer.Status)
 	}
 }
 
 func TestNativeWindowCanUseVelloNativeRenderer(t *testing.T) {
 	t.Setenv("VUGRA_NATIVE_RENDERER", "vello-native")
-	if _, err := os.Stat("../../tools/vello-native/target/debug/libvello_native.dylib"); err != nil {
+	if !velloNativeDylibAvailable() {
 		t.Skip("build vello-native first: cargo build --manifest-path tools/vello-native/Cargo.toml")
 	}
 	window, err := New("Vugra", 320, 200)
@@ -387,10 +394,24 @@ func BenchmarkNativeWindowVelloDispatchMouseRepaint(b *testing.B) {
 }
 
 func BenchmarkNativeWindowVelloNativeDispatchMouseRepaint(b *testing.B) {
-	if _, err := os.Stat("../../tools/vello-native/target/debug/libvello_native.dylib"); err != nil {
+	if !velloNativeDylibAvailable() {
 		b.Skip("build vello-native first: cargo build --manifest-path tools/vello-native/Cargo.toml")
 	}
 	benchmarkNativeWindowDispatchMouseRepaint(b, "vello-native")
+}
+
+func velloNativeDylibAvailable() bool {
+	for _, candidate := range []string{
+		filepath.Join("..", "..", "tools", "vello-native", "target", "debug", "libvello_native.dylib"),
+		filepath.Join("..", "..", "tools", "vello-native", "target", "debug", "deps", "libvello_native.dylib"),
+		filepath.Join("..", "..", "tools", "vello-native", "target", "release", "libvello_native.dylib"),
+		filepath.Join("..", "..", "tools", "vello-native", "target", "release", "deps", "libvello_native.dylib"),
+	} {
+		if _, err := os.Stat(candidate); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func BenchmarkNativeWindowSoftwareDispatchMouseRepaint(b *testing.B) {

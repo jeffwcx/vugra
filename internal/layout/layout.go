@@ -227,11 +227,8 @@ type engine struct {
 func (e *engine) layoutNodes(nodes []ir.Node, x, y, width, height float32) []Box {
 	var boxes []Box
 	cursorY := y
-	for _, node := range nodes {
-		availableHeight := float32(0)
-		if len(boxes) == 0 {
-			availableHeight = height
-		}
+	for index, node := range nodes {
+		availableHeight := e.availableHeightForBlockChild(nodes, index, y, cursorY, height)
 		box, ok := e.layoutNode(node, x, cursorY, width, availableHeight)
 		if !ok {
 			continue
@@ -240,6 +237,82 @@ func (e *engine) layoutNodes(nodes []ir.Node, x, y, width, height float32) []Box
 		cursorY += flowHeight(box)
 	}
 	return boxes
+}
+
+func (e *engine) availableHeightForBlockChild(nodes []ir.Node, index int, startY, cursorY, height float32) float32 {
+	if height <= 0 {
+		return 0
+	}
+	if index == 0 {
+		return height
+	}
+	if !e.nodeCanFillRemainingBlockHeight(nodes[index]) {
+		return 0
+	}
+	trailing := e.trailingFixedBlockHeight(nodes[index+1:])
+	remaining := height - (cursorY - startY) - trailing
+	if remaining <= 0 {
+		return 0
+	}
+	return remaining
+}
+
+func (e *engine) trailingFixedBlockHeight(nodes []ir.Node) float32 {
+	total := float32(0)
+	for _, node := range nodes {
+		if e.nodeCanFillRemainingBlockHeight(node) {
+			continue
+		}
+		total += e.estimatedFixedBlockHeight(node)
+	}
+	return total
+}
+
+func (e *engine) estimatedFixedBlockHeight(node ir.Node) float32 {
+	switch n := node.(type) {
+	case *ir.Element:
+		props, _ := e.propsMap(n.Props)
+		computed := style.ComputeWithTokens(e.styles, props["class"], e.systemTokens)
+		height := computed.Height
+		if height <= 0 {
+			height = computed.MinHeight
+		}
+		return height + computed.Margin*2
+	case *ir.ComponentInstance:
+		if len(n.Nodes) == 1 {
+			return e.estimatedFixedBlockHeight(n.Nodes[0])
+		}
+	case *ir.Conditional:
+		if e.resolveTruthy != nil && !e.resolveTruthy(n.Expression) {
+			return 0
+		}
+		return e.estimatedFixedBlockHeight(n.Child)
+	}
+	return 0
+}
+
+func (e *engine) nodeCanFillRemainingBlockHeight(node ir.Node) bool {
+	switch n := node.(type) {
+	case *ir.Element:
+		props, _ := e.propsMap(n.Props)
+		computed := style.ComputeWithTokens(e.styles, props["class"], e.systemTokens)
+		return computed.FlexGrow > 0 ||
+			computed.HeightPercent > 0
+	case *ir.ComponentInstance:
+		if len(n.Nodes) != 1 {
+			return false
+		}
+		return e.nodeCanFillRemainingBlockHeight(n.Nodes[0])
+	case *ir.DynamicComponent:
+		return true
+	case *ir.Conditional:
+		if e.resolveTruthy != nil && !e.resolveTruthy(n.Expression) {
+			return false
+		}
+		return e.nodeCanFillRemainingBlockHeight(n.Child)
+	default:
+		return false
+	}
 }
 
 func (e *engine) layoutNode(node ir.Node, x, y, width, height float32) (Box, bool) {
@@ -445,8 +518,13 @@ func (e *engine) layoutElement(elem *ir.Element, x, y, availableWidth, available
 	if width < 0 {
 		width = 0
 	}
+	usesContentBox := computed.BoxSizing == "content-box"
 	if computed.Width > 0 {
-		width = computed.Width
+		if usesContentBox {
+			width = computed.Width + paddingLeft + padding
+		} else {
+			width = computed.Width
+		}
 	} else if computed.WidthPercent > 0 {
 		width = availableWidth * computed.WidthPercent / 100
 	}
@@ -495,14 +573,14 @@ func (e *engine) layoutElement(elem *ir.Element, x, y, availableWidth, available
 
 	height := float32(0)
 	if elem.Tag != "svg" {
+		childHeight := explicitContentHeight(computed, availableHeight, padding)
 		switch computed.Display {
 		case "flex":
-			childHeight := resolvedContentHeight(computed, availableHeight, padding)
 			box.Children, height = e.layoutFlexChildren(elem.Children, box.Rect.X+paddingLeft, box.Rect.Y+padding, contentWidth, childHeight, computed)
 		case "grid":
-			box.Children, height = e.layoutGridChildren(elem.Children, box.Rect.X+paddingLeft, box.Rect.Y+padding, contentWidth, computed)
+			box.Children, height = e.layoutGridChildren(elem.Children, box.Rect.X+paddingLeft, box.Rect.Y+padding, contentWidth, childHeight, computed)
 		default:
-			box.Children, height = e.layoutBlockChildren(elem.Children, box.Rect.X+paddingLeft, box.Rect.Y+padding, contentWidth)
+			box.Children, height = e.layoutBlockChildren(elem.Children, box.Rect.X+paddingLeft, box.Rect.Y+padding, contentWidth, childHeight)
 		}
 	}
 	height += padding * 2
@@ -514,10 +592,18 @@ func (e *engine) layoutElement(elem *ir.Element, x, y, availableWidth, available
 				measuredHeight = 24
 			}
 		}
-		height = measuredHeight + padding*2
+		if usesContentBox {
+			height = measuredHeight + padding*2
+		} else {
+			height = measuredHeight
+		}
 	}
 	if computed.Height > 0 {
-		height = computed.Height
+		if usesContentBox {
+			height = computed.Height + padding*2
+		} else {
+			height = computed.Height
+		}
 	} else if computed.HeightPercent > 0 && availableHeight > 0 {
 		height = availableHeight * computed.HeightPercent / 100
 	} else if availableHeight > 0 && height < availableHeight {
@@ -613,11 +699,12 @@ func FileAssetResolver(basePath string) func(string) (string, bool) {
 	}
 }
 
-func (e *engine) layoutBlockChildren(nodes []ir.Node, x, y, width float32) ([]Box, float32) {
+func (e *engine) layoutBlockChildren(nodes []ir.Node, x, y, width, height float32) ([]Box, float32) {
 	var boxes []Box
 	cursorY := y
-	for _, child := range nodes {
-		childBox, ok := e.layoutNode(child, x, cursorY, width, 0)
+	for index, child := range nodes {
+		availableHeight := e.availableHeightForBlockChild(nodes, index, y, cursorY, height)
+		childBox, ok := e.layoutNode(child, x, cursorY, width, availableHeight)
 		if !ok {
 			continue
 		}
@@ -634,6 +721,22 @@ func resolvedContentHeight(computed style.Computed, availableHeight, padding flo
 	} else if computed.HeightPercent > 0 && availableHeight > 0 {
 		height = availableHeight * computed.HeightPercent / 100
 	} else if availableHeight > 0 {
+		height = availableHeight
+	}
+	height -= padding * 2
+	if height < 0 {
+		return 0
+	}
+	return height
+}
+
+func explicitContentHeight(computed style.Computed, availableHeight, padding float32) float32 {
+	height := float32(0)
+	if computed.Height > 0 {
+		height = computed.Height
+	} else if computed.HeightPercent > 0 && availableHeight > 0 {
+		height = availableHeight * computed.HeightPercent / 100
+	} else if computed.FlexGrow > 0 && availableHeight > 0 {
 		height = availableHeight
 	}
 	height -= padding * 2
@@ -746,6 +849,9 @@ func (e *engine) layoutRowChildren(nodes []ir.Node, x, y, width, height, gap flo
 		if !ok {
 			continue
 		}
+		if e.flexRowAutoMainSize(child) {
+			resizeBoxWidth(&childBox, intrinsicChildrenWidth(childBox))
+		}
 		entries = append(entries, entry{box: childBox, ok: true})
 		fixedWidth += flowWidth(childBox)
 		visible++
@@ -790,6 +896,9 @@ func (e *engine) layoutRowChildren(nodes []ir.Node, x, y, width, height, gap flo
 			boxes = append(boxes, entry.box)
 		}
 	}
+	if height > maxHeight && maxHeight == 0 {
+		maxHeight = height
+	}
 	if computed.FlexWrap == "wrap" {
 		return layoutWrappedRow(boxes, x, y, width, gap, rowGap(computed), computed)
 	}
@@ -801,6 +910,12 @@ func (e *engine) layoutRowChildren(nodes []ir.Node, x, y, width, height, gap flo
 		totalWidth += gap * float32(len(boxes)-1)
 	}
 	cursorX := x + justifyOffset(width, totalWidth, computed.Justify)
+	if computed.Justify == "space-between" && len(boxes) > 1 {
+		remaining := width - totalWidth
+		if remaining > 0 {
+			gap += remaining / float32(len(boxes)-1)
+		}
+	}
 	for i := range boxes {
 		targetOuterX := cursorX
 		targetOuterY := y + crossAxisOffset(maxHeight, flowHeight(boxes[i]), computed.AlignItems)
@@ -819,12 +934,17 @@ func (e *engine) flexMetricsForNode(node ir.Node) (grow float32, baseWidth float
 	switch n := node.(type) {
 	case *ir.Element:
 		props, _ := e.propsMap(n.Props)
-		computed := style.Compute(e.styles, props["class"])
+		computed := style.ComputeWithTokens(e.styles, props["class"], e.systemTokens)
 		base := computed.FlexBasis
 		if base <= 0 && computed.Width > 0 {
 			base = computed.Width
 		}
 		return computed.FlexGrow, base, base > 0
+	case *ir.ComponentInstance:
+		if len(n.Nodes) != 1 {
+			return 0, 0, false
+		}
+		return e.flexMetricsForNode(n.Nodes[0])
 	case *ir.Conditional:
 		if e.resolveTruthy != nil && !e.resolveTruthy(n.Expression) {
 			return 0, 0, false
@@ -833,6 +953,44 @@ func (e *engine) flexMetricsForNode(node ir.Node) (grow float32, baseWidth float
 	default:
 		return 0, 0, false
 	}
+}
+
+func (e *engine) flexRowAutoMainSize(node ir.Node) bool {
+	switch n := node.(type) {
+	case *ir.Element:
+		props, _ := e.propsMap(n.Props)
+		computed := style.ComputeWithTokens(e.styles, props["class"], e.systemTokens)
+		return computed.FlexGrow == 0 &&
+			computed.FlexBasis == 0 &&
+			computed.Width == 0 &&
+			computed.WidthPercent == 0
+	case *ir.ComponentInstance:
+		return len(n.Nodes) == 1 && e.flexRowAutoMainSize(n.Nodes[0])
+	case *ir.Conditional:
+		if e.resolveTruthy != nil && !e.resolveTruthy(n.Expression) {
+			return false
+		}
+		return e.flexRowAutoMainSize(n.Child)
+	default:
+		return false
+	}
+}
+
+func intrinsicChildrenWidth(box Box) float32 {
+	if len(box.Children) == 0 {
+		return box.Rect.Width
+	}
+	right := box.Rect.X
+	for _, child := range box.Children {
+		if childRight := child.Rect.X + flowWidth(child); childRight > right {
+			right = childRight
+		}
+	}
+	width := right - box.Rect.X
+	if width < 0 {
+		return 0
+	}
+	return width
 }
 
 func layoutWrappedRow(boxes []Box, x, y, width, columnGap, rowGap float32, computed style.Computed) ([]Box, float32) {
@@ -881,11 +1039,12 @@ func layoutWrappedRow(boxes []Box, x, y, width, columnGap, rowGap float32, compu
 	return boxes, cursorY - y
 }
 
-func (e *engine) layoutGridChildren(nodes []ir.Node, x, y, width float32, computed style.Computed) ([]Box, float32) {
+func (e *engine) layoutGridChildren(nodes []ir.Node, x, y, width, height float32, computed style.Computed) ([]Box, float32) {
 	columns := resolveTracks(computed.GridTemplateColumns, width, columnGap(computed))
 	if len(columns) == 0 {
 		columns = []float32{width}
 	}
+	rows := resolveTracks(computed.GridTemplateRows, height, rowGap(computed))
 	var boxes []Box
 	rowHeights := map[int]float32{}
 	visibleIndex := 0
@@ -915,7 +1074,8 @@ func (e *engine) layoutGridChildren(nodes []ir.Node, x, y, width float32, comput
 		}
 		childY := y + gridRowsHeight(rowHeights, computed.GridTemplateRows, row, rowGap(computed))
 		childWidth := gridSpanSize(columns, column, columnPlacement.Span, columnGap(computed))
-		childBox, ok := e.layoutNode(child, childX, childY, childWidth, 0)
+		childHeight := gridSpanSize(rows, row, rowPlacement.Span, rowGap(computed))
+		childBox, ok := e.layoutNode(child, childX, childY, childWidth, childHeight)
 		if !ok {
 			continue
 		}
@@ -1311,6 +1471,8 @@ func justifyOffset(width, contentWidth float32, justify string) float32 {
 		return remaining / 2
 	case "flex-end", "end", "right":
 		return remaining
+	case "space-between":
+		return 0
 	default:
 		return 0
 	}

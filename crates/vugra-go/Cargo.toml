@@ -1,0 +1,8 @@
+[package]
+name = "vugra-go"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vugra-abi = { path = "../vugra-abi" }
+

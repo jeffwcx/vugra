@@ -17,6 +17,8 @@ func New(title string, width, height int) (*Window, error) {
 
 func (w *Window) Render(commands []renderer.Command) {}
 
+func (w *Window) Pixels() []byte { return nil }
+
 func (w *Window) Run(app *runtime.App) error {
 	return fmt.Errorf("native window backend is not enabled")
 }

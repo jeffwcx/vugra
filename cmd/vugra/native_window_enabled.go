@@ -15,6 +15,7 @@ import (
 	"github.com/vugra/vugra/internal/reactivity"
 	"github.com/vugra/vugra/internal/runtime"
 	"github.com/vugra/vugra/internal/vellonative"
+	"github.com/vugra/vugra/pkg/system"
 )
 
 func runNativeWindow(args []string) error {
@@ -116,6 +117,102 @@ func runProject(args []string) error {
 	printNativeLaunch("run", cfg.App.Title, entryPath, cfg.App.Width, cfg.App.Height, nativeRendererModeName(), cfg.Runtime.Layout)
 	printNativeProgress("run", "entering native event loop")
 	return target.Run(mounted)
+}
+
+func runGoFinderLiteNativeWindowSmoke() error {
+	previousWD, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get cwd: %w", err)
+	}
+	root, err := os.MkdirTemp("", "vugra-go-finder-window-smoke-*")
+	if err != nil {
+		return fmt.Errorf("create native window smoke fixture: %w", err)
+	}
+	defer os.RemoveAll(root)
+	if err := os.Chdir(root); err != nil {
+		return fmt.Errorf("enter native window smoke fixture: %w", err)
+	}
+	defer os.Chdir(previousWD)
+
+	fixture, err := createGoFinderSmokeFixture(root)
+	if err != nil {
+		return err
+	}
+	componentPath, err := goFinderLiteComponentPath(previousWD)
+	if err != nil {
+		return err
+	}
+	result, err := compiler.CompileFile(componentPath)
+	if err != nil {
+		return fmt.Errorf("compile FinderLite: %w", err)
+	}
+	if diagnostics := result.Diagnostics(); len(diagnostics) > 0 {
+		return fmt.Errorf("compile FinderLite produced %d diagnostic(s)", len(diagnostics))
+	}
+
+	scheduler := reactivity.NewScheduler()
+	if firstEnv("VUGRA_NATIVE_TITLEBAR", "VUEGO_NATIVE_TITLEBAR") == "" {
+		os.Setenv("VUGRA_NATIVE_TITLEBAR", "hidden")
+	}
+	target, err := nativewindow.New("Go Finder Lite Smoke", 800, 600)
+	if err != nil {
+		return err
+	}
+	defer target.CloseForTest()
+	measurer := nativeMeasurerOrFixed()
+	if closer, ok := measurer.(interface{ Close() }); ok {
+		defer closer.Close()
+	}
+	state := newFinderDemoStateWithFileSystem(scheduler, system.OSFileSystem{}, finderSidebar{
+		documents: fixture.documents,
+		downloads: fixture.downloads,
+		pictures:  fixture.pictures,
+		projectA:  fixture.projectA,
+		projectB:  fixture.projectB,
+	}).state()
+	mounted := app.Mount(result, state, target, app.Options{
+		Scheduler:   scheduler,
+		Constraints: layout.Constraints{Width: 800, Height: 600},
+		Measurer:    measurer,
+		Layout:      layoutEngineFromEnv(),
+	})
+	if err := target.OpenForTest(mounted); err != nil {
+		return err
+	}
+	target.FlushForTest()
+	if err := validateGoFinderFrame(target.Commands, "native-window-initial", fixture.documents, "Design", "12 items · Current path: "+fixture.documents); err != nil {
+		return err
+	}
+	firstRow := goFinderElementWithText(target.Commands, "Design")
+	if firstRow.ID == "" {
+		return fmt.Errorf("go-finder-lite native-window-smoke failed: missing Design row hit target")
+	}
+	target.MouseDownForTest(int(firstRow.Rect.X+2), int(firstRow.Rect.Y+2))
+	target.FlushForTest()
+	if err := validateGoFinderFrame(target.Commands, "native-window-selection", fixture.documents, "Design", "1 items selected"); err != nil {
+		return err
+	}
+	pixels := target.Pixels()
+	drawn := goFinderNativeWindowDrawnPixels(pixels)
+	if len(pixels) == 0 || drawn == 0 {
+		return fmt.Errorf("go-finder-lite native-window-smoke failed: pixels=%d drawn=%d", len(pixels), drawn)
+	}
+	fmt.Printf("go-finder-lite native-window-smoke renderer=%s commands=%d pixels=%d drawn=%d\n", nativeRendererModeName(), len(target.Commands), len(pixels)/4, drawn)
+	fmt.Println("go-finder-lite native-window-smoke ok")
+	return nil
+}
+
+func goFinderNativeWindowDrawnPixels(pixels []byte) int {
+	if len(pixels) < 4 {
+		return 0
+	}
+	count := 0
+	for i := 0; i+3 < len(pixels); i += 4 {
+		if pixels[i] != 250 || pixels[i+1] != 250 || pixels[i+2] != 250 || pixels[i+3] != 255 {
+			count++
+		}
+	}
+	return count
 }
 
 func nativeMeasurerOrFixed() layout.Measurer {

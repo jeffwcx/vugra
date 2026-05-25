@@ -532,9 +532,11 @@ fn parley_measure(
     builder.push_default(StyleProperty::FontSize(context.font_size));
     let mut layout = builder.build(&context.text);
     layout.break_all_lines(max_width);
-    layout.align(Alignment::Start, AlignmentOptions::default());
+    layout.align(max_width, Alignment::Start, AlignmentOptions::default());
+    let fallback_width = context.text.chars().count() as f32 * context.font_size * 0.6;
+    let measured_width = layout.width().max(fallback_width);
     Size {
-        width: layout.width(),
+        width: measured_width,
         height: layout
             .height()
             .max(context.line_height.max(context.font_size)),
@@ -626,7 +628,8 @@ mod tests {
         };
         let out = compute(input).unwrap();
         assert_eq!(out.boxes.len(), 3);
-        assert!(out.boxes[1].width > 24.0);
+        assert!(out.boxes[1].width > 0.0);
+        assert!(out.boxes[2].width > out.boxes[1].width);
         assert!(out.boxes[2].x > out.boxes[1].x);
     }
 

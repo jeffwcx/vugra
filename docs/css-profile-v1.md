@@ -44,6 +44,12 @@ examples and tests: `grid-template-columns`, `grid-template-rows`,
 Lengths currently support `px` for fixed sizes and `%` for `width`/`height`
 against the parent layout size.
 
+Vugra CSS Profile v1 defaults to UI-framework sizing: explicit `width` and
+`height` describe the element's outer layout box. `box-sizing: border-box`
+therefore preserves that default behavior explicitly. `box-sizing: content-box`
+is also supported; in that mode explicit `width` and `height` describe the
+content box and padding expands the outer layout box.
+
 Unsupported properties produce `style.unsupported_property` warnings and are
 explicit no-ops.
 

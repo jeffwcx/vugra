@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -38,6 +40,21 @@ func TestUsageIncludesProjectRun(t *testing.T) {
 	if err := usage(); err == nil || !strings.Contains(err.Error(), "run [config-or-dir]") {
 		t.Fatalf("usage = %v", err)
 	}
+	if err := usage(); err == nil || !strings.Contains(err.Error(), "go-finder-lite [smoke|native|run|native-window-smoke]") {
+		t.Fatalf("usage = %v", err)
+	}
+	if err := usage(); err == nil || !strings.Contains(err.Error(), "finder-parity-smoke") {
+		t.Fatalf("usage = %v", err)
+	}
+	if err := usage(); err == nil || !strings.Contains(err.Error(), "rust-sfc-smoke [file]") {
+		t.Fatalf("usage = %v", err)
+	}
+	if err := usage(); err == nil || !strings.Contains(err.Error(), "rust-finder-sfc [native|native-software|native-vello|native-wgpu|native-window-smoke|native-software-window-smoke|native-vello-window-smoke|native-wgpu-window-smoke]") {
+		t.Fatalf("usage = %v", err)
+	}
+	if err := usage(); err == nil || !strings.Contains(err.Error(), "gui-runtime-smoke [window]") {
+		t.Fatalf("usage = %v", err)
+	}
 	if err := usage(); err == nil || !strings.Contains(err.Error(), "wasm <file> <out-dir>") {
 		t.Fatalf("usage = %v", err)
 	}
@@ -46,6 +63,190 @@ func TestUsageIncludesProjectRun(t *testing.T) {
 	}
 	if err := usage(); err == nil || !strings.Contains(err.Error(), "wasm-serve <bundle-dir> [addr]") {
 		t.Fatalf("usage = %v", err)
+	}
+}
+
+func TestRunGoFinderLiteSmoke(t *testing.T) {
+	out := captureStdout(t, func() {
+		if err := runGoFinderLite([]string{"smoke"}); err != nil {
+			t.Fatalf("run go finder lite smoke: %v", err)
+		}
+	})
+	for _, want := range []string{
+		"go software commands=",
+		"go runtime path=Documents row=Roadmap.md",
+		"go-finder-lite smoke ok",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestRunGoFinderLiteRejectsUnknownVariant(t *testing.T) {
+	if err := runGoFinderLite([]string{"bogus"}); err == nil || !strings.Contains(err.Error(), "go-finder-lite variant must be smoke, native, run, or native-window-smoke") {
+		t.Fatalf("expected go finder variant error, got %v", err)
+	}
+}
+
+func TestRunFinderParitySmoke(t *testing.T) {
+	out := captureStdout(t, func() {
+		if err := runFinderParitySmoke(nil); err != nil {
+			t.Fatalf("run finder parity smoke: %v", err)
+		}
+	})
+	for _, want := range []string{
+		"finder-parity go commands=",
+		"finder-parity rust commands=",
+		"finder-parity-smoke ok",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestRunGoFinderLiteNativeUsesFinderComponent(t *testing.T) {
+	oldNative := goFinderNativeWindow
+	t.Cleanup(func() { goFinderNativeWindow = oldNative })
+	var got []string
+	goFinderNativeWindow = func(args []string) error {
+		got = append([]string(nil), args...)
+		return nil
+	}
+	if err := runGoFinderLite([]string{"native"}); err != nil {
+		t.Fatalf("run go finder native: %v", err)
+	}
+	if len(got) != 1 || !strings.HasSuffix(filepath.ToSlash(got[0]), "examples/finder/FinderLite.vue") {
+		t.Fatalf("native args = %#v", got)
+	}
+}
+
+func TestRunGoFinderLiteRunUsesFinderProject(t *testing.T) {
+	oldRun := goFinderProjectRun
+	t.Cleanup(func() { goFinderProjectRun = oldRun })
+	var got []string
+	goFinderProjectRun = func(args []string) error {
+		got = append([]string(nil), args...)
+		return nil
+	}
+	if err := runGoFinderLite([]string{"run"}); err != nil {
+		t.Fatalf("run go finder project: %v", err)
+	}
+	if len(got) != 1 || !strings.HasSuffix(filepath.ToSlash(got[0]), "examples/finder") {
+		t.Fatalf("run args = %#v", got)
+	}
+}
+
+func TestRunGoFinderLiteNativeWindowSmokeUsesHook(t *testing.T) {
+	oldSmoke := goFinderNativeWindowSmoke
+	t.Cleanup(func() { goFinderNativeWindowSmoke = oldSmoke })
+	called := false
+	goFinderNativeWindowSmoke = func() error {
+		called = true
+		return nil
+	}
+	if err := runGoFinderLite([]string{"native-window-smoke"}); err != nil {
+		t.Fatalf("run go finder native window smoke: %v", err)
+	}
+	if !called {
+		t.Fatal("native window smoke hook was not called")
+	}
+}
+
+func TestRunRustSFCSmoke(t *testing.T) {
+	out := captureStdout(t, func() {
+		if err := runRustSFCSmoke(nil); err != nil {
+			t.Fatalf("run rust SFC smoke: %v", err)
+		}
+	})
+	for _, want := range []string{
+		"rust-sfc path=",
+		"fields=1",
+		"methods=1",
+		"adapter_bytes=",
+		"rust-sfc-codegen signals=1 methods=1",
+		"rust-sfc-smoke ok",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestRunRustFinderSFCRejectsUnknownVariant(t *testing.T) {
+	if err := runRustFinderSFC([]string{"go"}); err == nil || !strings.Contains(err.Error(), "rust-finder-sfc variant must be native, native-software, native-vello, native-wgpu, native-window-smoke, native-software-window-smoke, native-vello-window-smoke, or native-wgpu-window-smoke") {
+		t.Fatalf("expected rust finder SFC variant error, got %v", err)
+	}
+}
+
+func TestRunGUIRuntimeSmoke(t *testing.T) {
+	old := rustFinderCommand
+	t.Cleanup(func() { rustFinderCommand = old })
+	rustFinderCommand = func(variant string) *exec.Cmd {
+		return exec.Command(os.Args[0], "-test.run=TestRustFinderLiteHelperProcess", "--", variant)
+	}
+	t.Setenv("VUGRA_RUST_FINDER_HELPER", "1")
+
+	out := captureStdout(t, func() {
+		if err := runGUIRuntimeSmoke(nil); err != nil {
+			t.Fatalf("run gui runtime smoke: %v", err)
+		}
+	})
+	for _, want := range []string{
+		"go-finder-lite smoke ok",
+		"rust-sfc-smoke ok",
+		"helper variant=native-smoke",
+		"helper variant=generated-adapter-smoke",
+		"helper variant=wgpu-device-smoke",
+		"gui-runtime-smoke ok",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestRunGUIRuntimeSmokeWindow(t *testing.T) {
+	old := rustFinderCommand
+	t.Cleanup(func() { rustFinderCommand = old })
+	oldGoWindowSmoke := goFinderNativeWindowSmoke
+	t.Cleanup(func() { goFinderNativeWindowSmoke = oldGoWindowSmoke })
+	rustFinderCommand = func(variant string) *exec.Cmd {
+		return exec.Command(os.Args[0], "-test.run=TestRustFinderLiteHelperProcess", "--", variant)
+	}
+	goFinderNativeWindowSmoke = func() error {
+		fmt.Println("go-finder-lite native-window-smoke ok")
+		return nil
+	}
+	t.Setenv("VUGRA_RUST_FINDER_HELPER", "1")
+
+	out := captureStdout(t, func() {
+		if err := runGUIRuntimeSmoke([]string{"window"}); err != nil {
+			t.Fatalf("run gui runtime smoke window: %v", err)
+		}
+	})
+	for _, want := range []string{
+		"go-finder-lite smoke ok",
+		"go-finder-lite native-window-smoke ok",
+		"rust-sfc-smoke ok",
+		"helper variant=native-smoke",
+		"helper variant=generated-adapter-smoke",
+		"helper variant=wgpu-device-smoke",
+		"rust-finder-sfc native-window-smoke ok",
+		"rust-finder-sfc native-software-window-smoke ok",
+		"rust-finder-sfc native-wgpu-window-smoke ok",
+		"helper variant=native-window-smoke",
+		"helper variant=native-software-window-smoke",
+		"helper variant=native-wgpu-window-smoke",
+		"helper variant=abi-window-smoke",
+		"helper variant=abi-software-window-smoke",
+		"helper variant=abi-wgpu-window-smoke",
+		"gui-runtime-smoke ok",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
 	}
 }
 

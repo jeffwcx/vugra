@@ -84,13 +84,25 @@ func run(args []string) error {
 		return runNativeApp(args[1:])
 	case "a11y":
 		return runA11y(args[1:])
+	case "rust-finder-lite":
+		return runRustFinderLite(args[1:])
+	case "go-finder-lite":
+		return runGoFinderLite(args[1:])
+	case "finder-parity-smoke":
+		return runFinderParitySmoke(args[1:])
+	case "rust-sfc-smoke":
+		return runRustSFCSmoke(args[1:])
+	case "rust-finder-sfc":
+		return runRustFinderSFC(args[1:])
+	case "gui-runtime-smoke":
+		return runGUIRuntimeSmoke(args[1:])
 	default:
 		return usage()
 	}
 }
 
 func usage() error {
-	return fmt.Errorf("usage: vugra parse <file> | check <file> | ir <file> | frame <file> | vello-ops <file> | vello-png <file> <out.png> | a11y <file> | png <file> <out.png> | native-png <file> <out.png> | native-window <file> | run [config-or-dir] | native-app <binary> <out.app> [args...] | gen <file> | gen-main <component-import> <out.png> | gen-wasm-main <component-import> <canvas-id> | wasm-host <wasm-path> | wasm <file> <out-dir> | wasm-run <file-or-project> [addr] | wasm-serve <bundle-dir> [addr]")
+	return fmt.Errorf("usage: vugra parse <file> | check <file> | ir <file> | frame <file> | vello-ops <file> | vello-png <file> <out.png> | a11y <file> | png <file> <out.png> | native-png <file> <out.png> | native-window <file> | run [config-or-dir] | go-finder-lite [smoke|native|run|native-window-smoke] | finder-parity-smoke | rust-sfc-smoke [file] | rust-finder-sfc [native|native-software|native-vello|native-wgpu|native-window-smoke|native-software-window-smoke|native-vello-window-smoke|native-wgpu-window-smoke] | rust-finder-lite [direct|abi|generated-adapter-smoke|parity-summary|native|native-software|native-vello|native-wgpu|abi-native|abi-native-software|abi-native-vello|abi-native-wgpu|native-smoke|native-window-smoke|native-software-window-smoke|native-vello-window-smoke|native-wgpu-window-smoke|abi-window-smoke|abi-software-window-smoke|abi-vello-window-smoke|abi-wgpu-window-smoke|vello-device-smoke|wgpu-device-smoke] | gui-runtime-smoke [window] | native-app <binary> <out.app> [args...] | gen <file> | gen-main <component-import> <out.png> | gen-wasm-main <component-import> <canvas-id> | wasm-host <wasm-path> | wasm <file> <out-dir> | wasm-run <file-or-project> [addr] | wasm-serve <bundle-dir> [addr]")
 }
 
 func layoutEngineFromEnv() runtime.LayoutEngine {

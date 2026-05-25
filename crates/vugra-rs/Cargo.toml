@@ -1,0 +1,12 @@
+[package]
+name = "vugra-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+minifb = "0.27"
+vugra-core = { path = "../vugra-core" }
+vugra-host-native = { path = "../vugra-host-native" }
+vugra-ir = { path = "../vugra-ir" }
+vugra-layout = { path = "../vugra-layout" }
+vugra-render = { path = "../vugra-render" }

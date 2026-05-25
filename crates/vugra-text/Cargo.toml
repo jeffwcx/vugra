@@ -1,0 +1,10 @@
+[package]
+name = "vugra-text"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+font8x8 = "0.3"
+fontdue = { version = "0.9.3", default-features = false, features = ["std"] }
+rustybuzz = "0.20.1"
+ttf-parser = "0.25.1"

@@ -34,6 +34,10 @@ func BuildVirtualFiles(name string, result *compiler.Result) VirtualFileSet {
 		}
 		if block := result.SFC.Script; block != nil {
 			out.Script.Content = block.Content
+			if block.Lang == "rust" {
+				out.Script.FileName = name + ".script.rs"
+				out.Script.Language = "rust"
+			}
 			out.Script.Span = compiler.Span{Start: compiler.Position(block.ContentSpan.Start), End: compiler.Position(block.ContentSpan.End)}
 		}
 		if block := result.SFC.Style; block != nil {

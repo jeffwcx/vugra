@@ -8,11 +8,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 anyhow = "1.0.102"
-cosmic-text = "0.19.0"
+cosmic-text = "=0.17.0"
 futures-intrusive = "0.5"
 pollster = "0.4"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 roxmltree = "0.21.1"
-svgtypes = "0.16.1"
-vello = "0.9.0"
+svgtypes = "=0.15.3"
+vello = "=0.4.1"

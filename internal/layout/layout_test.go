@@ -78,6 +78,58 @@ func TestPercentWidthUsesAvailableWidth(t *testing.T) {
 	}
 }
 
+func TestBoxSizingBorderBoxKeepsExplicitOuterSize(t *testing.T) {
+	templateDoc := template.Parse(`<div class="panel"><p>A</p></div>`, 0)
+	component := ir.Build(ir.BuildInput{Name: "BorderBox", Template: templateDoc, Go: goanalysis.Metadata{}})
+	sheet := style.Parse(`
+.panel {
+  box-sizing: border-box;
+  width: 200px;
+  height: 80px;
+  padding: 20px;
+}
+`, style.BasePosition{})
+	boxes := layout.Compute(layout.Input{
+		Nodes:       component.Nodes,
+		Styles:      sheet,
+		Constraints: layout.Constraints{Width: 300},
+		Measurer:    layout.FixedMeasurer{CharWidth: 8, LineHeight: 20},
+	})
+	root := firstElement(t, boxes)
+	if root.Rect.Width != 200 || root.Rect.Height != 80 {
+		t.Fatalf("border-box rect = %+v", root.Rect)
+	}
+	if len(root.Children) != 1 || root.Children[0].Rect.X != 20 || root.Children[0].Rect.Width != 160 {
+		t.Fatalf("border-box child = %+v", root.Children)
+	}
+}
+
+func TestBoxSizingContentBoxAddsPaddingToExplicitSize(t *testing.T) {
+	templateDoc := template.Parse(`<div class="panel"><p>A</p></div>`, 0)
+	component := ir.Build(ir.BuildInput{Name: "ContentBox", Template: templateDoc, Go: goanalysis.Metadata{}})
+	sheet := style.Parse(`
+.panel {
+  box-sizing: content-box;
+  width: 200px;
+  height: 80px;
+  padding: 20px;
+}
+`, style.BasePosition{})
+	boxes := layout.Compute(layout.Input{
+		Nodes:       component.Nodes,
+		Styles:      sheet,
+		Constraints: layout.Constraints{Width: 300},
+		Measurer:    layout.FixedMeasurer{CharWidth: 8, LineHeight: 20},
+	})
+	root := firstElement(t, boxes)
+	if root.Rect.Width != 240 || root.Rect.Height != 120 {
+		t.Fatalf("content-box rect = %+v", root.Rect)
+	}
+	if len(root.Children) != 1 || root.Children[0].Rect.X != 20 || root.Children[0].Rect.Width != 200 {
+		t.Fatalf("content-box child = %+v", root.Children)
+	}
+}
+
 func TestSystemTokenPaddingLeftAffectsChildLayout(t *testing.T) {
 	templateDoc := template.Parse(`<div class="toolbar"><button>Back</button></div>`, 0)
 	component := ir.Build(ir.BuildInput{Name: "Toolbar", Template: templateDoc, Go: goanalysis.Metadata{}})
@@ -221,6 +273,47 @@ func TestRootPercentHeightUsesConstraints(t *testing.T) {
 	}
 }
 
+func TestLaterBlockFlexChildReceivesRemainingHeight(t *testing.T) {
+	templateDoc := template.Parse(`
+<div class="app">
+  <div class="toolbar"></div>
+  <div class="main"></div>
+  <div class="status"></div>
+</div>
+`, 0)
+	component := ir.Build(ir.BuildInput{Name: "BlockRemainingHeight", Template: templateDoc, Go: goanalysis.Metadata{}})
+	sheet := style.Parse(`
+.app {
+  height: 100%;
+}
+.toolbar {
+  height: 52px;
+}
+.main {
+  flex: 1;
+}
+.status {
+  height: 28px;
+}
+`, style.BasePosition{})
+	boxes := layout.Compute(layout.Input{
+		Nodes:       component.Nodes,
+		Styles:      sheet,
+		Constraints: layout.Constraints{Width: 240, Height: 180},
+		Measurer:    layout.FixedMeasurer{CharWidth: 8, LineHeight: 20},
+	})
+	root := firstElement(t, boxes)
+	if len(root.Children) != 3 {
+		t.Fatalf("children = %d", len(root.Children))
+	}
+	if root.Children[1].Rect.Height != 100 {
+		t.Fatalf("main rect = %+v", root.Children[1].Rect)
+	}
+	if root.Children[2].Rect.Y != 152 {
+		t.Fatalf("status rect = %+v", root.Children[2].Rect)
+	}
+}
+
 func TestDynamicComponentChoosesCaseFromBinding(t *testing.T) {
 	nodes := []ir.Node{&ir.DynamicComponent{
 		Binding: "current",
@@ -282,6 +375,83 @@ func TestFlexRowLayout(t *testing.T) {
 	}
 	if root.Children[0].Rect.Y != 8 {
 		t.Fatalf("child y = %g", root.Children[0].Rect.Y)
+	}
+}
+
+func TestFlexRowUsesAvailableCrossAxisHeight(t *testing.T) {
+	templateDoc := template.Parse(`
+<div class="main">
+  <div class="sidebar"></div>
+  <div class="content"></div>
+</div>
+`, 0)
+	component := ir.Build(ir.BuildInput{Name: "FlexRowCrossAxis", Template: templateDoc, Go: goanalysis.Metadata{}})
+	sheet := style.Parse(`
+.main {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+}
+.sidebar {
+  width: 80px;
+  height: 100%;
+}
+.content {
+  flex: 1;
+  height: 100%;
+}
+`, style.BasePosition{})
+	boxes := layout.Compute(layout.Input{
+		Nodes:       component.Nodes,
+		Styles:      sheet,
+		Constraints: layout.Constraints{Width: 300, Height: 180},
+		Measurer:    layout.FixedMeasurer{CharWidth: 8, LineHeight: 20},
+	})
+	root := firstElement(t, boxes)
+	if root.Rect.Height != 180 {
+		t.Fatalf("root rect = %+v", root.Rect)
+	}
+	if root.Children[0].Rect.Height != 180 || root.Children[1].Rect.Height != 180 {
+		t.Fatalf("child rects = %+v", root.Children)
+	}
+}
+
+func TestFlexRowJustifySpaceBetweenDistributesRemainingWidth(t *testing.T) {
+	templateDoc := template.Parse(`
+<div class="statusbar">
+  <p>12 items</p>
+  <p>0 selected</p>
+</div>
+`, 0)
+	component := ir.Build(ir.BuildInput{Name: "StatusBar", Template: templateDoc, Go: goanalysis.Metadata{}})
+	sheet := style.Parse(`
+.statusbar {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 800px;
+  height: 28px;
+  padding: 6px;
+}
+`, style.BasePosition{})
+	boxes := layout.Compute(layout.Input{
+		Nodes:       component.Nodes,
+		Styles:      sheet,
+		Constraints: layout.Constraints{Width: 800, Height: 28},
+		Measurer:    layout.FixedMeasurer{CharWidth: 8, LineHeight: 20},
+	})
+	root := firstElement(t, boxes)
+	if len(root.Children) != 2 {
+		t.Fatalf("children = %d", len(root.Children))
+	}
+	firstText := root.Children[0].Children[0]
+	secondText := root.Children[1].Children[0]
+	if firstText.Rect.X != 6 {
+		t.Fatalf("first text x = %g", firstText.Rect.X)
+	}
+	if secondText.Rect.X != 714 {
+		t.Fatalf("second text x = %g", secondText.Rect.X)
 	}
 }
 
@@ -493,6 +663,36 @@ func TestGridLayout(t *testing.T) {
 	}
 	if root.Children[2].Rect.Y != 55 {
 		t.Fatalf("cell 2 rect = %+v", root.Children[2].Rect)
+	}
+}
+
+func TestGridFrRowPassesAvailableHeightToChild(t *testing.T) {
+	templateDoc := template.Parse(`
+<div class="grid">
+  <div class="fill"></div>
+</div>
+`, 0)
+	component := ir.Build(ir.BuildInput{Name: "GridFrHeight", Template: templateDoc, Go: goanalysis.Metadata{}})
+	sheet := style.Parse(`
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  height: 100%;
+}
+.fill {
+  flex: 1;
+}
+`, style.BasePosition{})
+	boxes := layout.Compute(layout.Input{
+		Nodes:       component.Nodes,
+		Styles:      sheet,
+		Constraints: layout.Constraints{Width: 240, Height: 180},
+		Measurer:    layout.FixedMeasurer{CharWidth: 8, LineHeight: 20},
+	})
+	root := firstElement(t, boxes)
+	if root.Rect.Height != 180 || root.Children[0].Rect.Height != 180 {
+		t.Fatalf("grid rects root=%+v child=%+v", root.Rect, root.Children[0].Rect)
 	}
 }
 
